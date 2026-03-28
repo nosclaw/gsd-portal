@@ -5,12 +5,15 @@ import { appEnv } from "@/lib/env";
 
 /**
  * Build the workspace URL for a user.
- * Format: https://{username}-{workspace_domain}
- * e.g. https://admin-gsd-dev-local.letsme.run
  *
- * Falls back to env WORKSPACE_DOMAIN, then tenant settings.
+ * If workspace_domain is configured:
+ *   https://{username}-{workspace_domain}
+ *   e.g. https://admin-gsd-dev-local.letsme.run
+ *
+ * If no domain configured:
+ *   http://localhost:{port}
  */
-export async function getWorkspaceUrl(userId: number, username: string, port: number): Promise<string | null> {
+export async function getWorkspaceUrl(userId: number, username: string, port: number): Promise<string> {
   let domain = appEnv.workspaceDomain;
 
   if (!domain) {
@@ -22,8 +25,11 @@ export async function getWorkspaceUrl(userId: number, username: string, port: nu
     domain = (dbUser?.tenant?.settings as any)?.workspace_domain || "";
   }
 
-  if (!domain) return null;
+  if (domain) {
+    const protocol = domain.includes("localhost") ? "http" : "https";
+    return `${protocol}://${username}-${domain}`;
+  }
 
-  const protocol = domain.includes("localhost") ? "http" : "https";
-  return `${protocol}://${username}-${domain}`;
+  // Fallback: direct port access
+  return `http://localhost:${port}`;
 }

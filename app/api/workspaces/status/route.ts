@@ -34,10 +34,9 @@ export const GET = auth(async (req) => {
     where: eq(workspaceSessions.userId, userId)
   });
 
-  let workspaceUrl: string | null = null;
-  if (instance?.status === "RUNNING") {
-    workspaceUrl = await getWorkspaceUrl(userId, user.username, instance.port);
-  }
+  const workspaceUrl = instance?.status === "RUNNING"
+    ? await getWorkspaceUrl(userId, user.username, instance.port)
+    : null;
 
   return NextResponse.json({
     instance: instance || { status: "STOPPED" },

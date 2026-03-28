@@ -39,16 +39,6 @@ export const GET = auth(async (req) => {
     );
   }
 
-  // Try domain-based URL first, fallback to direct port
-  const domainUrl = await getWorkspaceUrl(Number(user.id), user.username, instance.port);
-
-  let workspaceUrl: string;
-  if (domainUrl) {
-    workspaceUrl = `${domainUrl}/#token=${accessToken}`;
-  } else {
-    const reqUrl = new URL(req.url);
-    workspaceUrl = `http://${reqUrl.hostname}:${instance.port}/#token=${accessToken}`;
-  }
-
-  return NextResponse.redirect(workspaceUrl);
+  const baseUrl = await getWorkspaceUrl(Number(user.id), user.username, instance.port);
+  return NextResponse.redirect(`${baseUrl}/#token=${accessToken}`);
 });

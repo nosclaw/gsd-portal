@@ -30,11 +30,27 @@ function spawnGsdWeb(
   email: string | undefined
 ): Promise<{ authToken: string; webPid: number | null }> {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn("gsd", [
+    // Build allowed origins for CORS
+    const origins: string[] = [
+      `http://localhost:${port}`,
+      `http://127.0.0.1:${port}`,
+      `http://0.0.0.0:${port}`,
+      appEnv.appBaseUrl
+    ];
+    const wsDomain = appEnv.workspaceDomain;
+    if (wsDomain) {
+      const protocol = wsDomain.includes("localhost") ? "http" : "https";
+      origins.push(`${protocol}://${username}-${wsDomain}`);
+    }
+
+    const args = [
       "--web", workspaceDir,
       "--port", port.toString(),
-      "--host", "0.0.0.0"
-    ], {
+      "--host", "0.0.0.0",
+      "--allowed-origins", origins.join(",")
+    ];
+
+    const child = spawn("gsd", args, {
       stdio: ["ignore", "ignore", "pipe"],
       cwd: workspaceDir,
       env: {
