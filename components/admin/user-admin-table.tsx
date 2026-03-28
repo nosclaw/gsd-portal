@@ -48,10 +48,13 @@ export function UserAdminTable() {
       ]);
       const usersData = await usersRes.json();
       const wsData = await wsRes.json();
-      if (Array.isArray(usersData)) setUsers(usersData);
-      if (Array.isArray(wsData)) {
+      // Handle both paginated { data: [] } and legacy array responses
+      const usersList = Array.isArray(usersData) ? usersData : (usersData.data ?? []);
+      setUsers(usersList);
+      const wsList = Array.isArray(wsData) ? wsData : (wsData.data ?? []);
+      if (Array.isArray(wsList)) {
         const map: Record<number, string> = {};
-        wsData.forEach((ws: any) => { map[ws.userId] = ws.status; });
+        wsList.forEach((ws: any) => { map[ws.userId] = ws.status; });
         setWorkspaces(map);
       }
     } catch {

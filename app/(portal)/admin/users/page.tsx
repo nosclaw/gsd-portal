@@ -17,14 +17,13 @@ export default function AdminUsersPage() {
   useEffect(() => {
     fetch("/api/admin/users")
       .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setStats({
-            pendingCount: data.filter((u: any) => u.status === "PENDING").length,
-            suspendedCount: data.filter((u: any) => u.status === "SUSPENDED").length,
-            totalCount: data.length
-          });
-        }
+      .then((raw) => {
+        const data = Array.isArray(raw) ? raw : (raw.data ?? []);
+        setStats({
+          pendingCount: data.filter((u: any) => u.status === "PENDING").length,
+          suspendedCount: data.filter((u: any) => u.status === "SUSPENDED").length,
+          totalCount: raw.total ?? data.length
+        });
       })
       .catch(() => {});
   }, []);

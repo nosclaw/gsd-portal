@@ -22,7 +22,7 @@ export function AuditLogTable() {
     const qs = params.toString();
     fetch(`/api/admin/audit${qs ? `?${qs}` : ""}`)
       .then((res) => res.json())
-      .then((data) => { if (Array.isArray(data)) setLogs(data); })
+      .then((raw) => { const data = Array.isArray(raw) ? raw : (raw.data ?? []); setLogs(data); })
       .finally(() => setLoading(false));
   }, [dateFrom, dateTo]);
 

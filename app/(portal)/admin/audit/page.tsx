@@ -17,9 +17,9 @@ export default function AuditPage() {
   useEffect(() => {
     fetch("/api/admin/audit")
       .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          // Calculate today's stats from audit logs
+      .then((raw) => {
+        const data = Array.isArray(raw) ? raw : (raw.data ?? []);
+        {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           const todayLogs = data.filter((log: any) => {

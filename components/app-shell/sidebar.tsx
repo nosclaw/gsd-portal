@@ -87,10 +87,9 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: {
     const fetchPending = () => {
       fetch("/api/admin/users")
         .then((res) => res.json())
-        .then((data) => {
-          if (Array.isArray(data)) {
-            setPendingCount(data.filter((u: any) => u.status === "PENDING").length);
-          }
+        .then((raw) => {
+          const data = Array.isArray(raw) ? raw : (raw.data ?? []);
+          setPendingCount(data.filter((u: any) => u.status === "PENDING").length);
         })
         .catch(() => {});
     };
