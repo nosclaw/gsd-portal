@@ -10,6 +10,7 @@ import {
   PanelLeftDashed,
   Settings,
   ShieldCheck,
+  User,
   UsersRound
 } from "lucide-react";
 import Link from "next/link";
@@ -24,7 +25,8 @@ const items = [
   { href: "/admin/users", label: "Approvals", icon: UsersRound, roles: ["ROOT_ADMIN", "TENANT_ADMIN"] },
   { href: "/admin/workspaces", label: "Workspaces", icon: Blocks, roles: ["ROOT_ADMIN", "TENANT_ADMIN"] },
   { href: "/admin/audit", label: "Audit", icon: ShieldCheck, roles: ["ROOT_ADMIN", "TENANT_ADMIN"] },
-  { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["ROOT_ADMIN", "TENANT_ADMIN"] }
+  { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["ROOT_ADMIN", "TENANT_ADMIN"] },
+  { href: "/settings", label: "My profile", icon: User, roles: ["ROOT_ADMIN", "TENANT_ADMIN", "MEMBER"] }
 ];
 
 export function Sidebar() {

@@ -4,14 +4,11 @@ import { users } from "@/lib/db/schema";
 import { appEnv } from "@/lib/env";
 
 /**
- * Build the workspace URL for a user.
+ * Build the workspace URL.
+ * All users share one workspace domain, distinguished by token.
  *
- * If workspace_domain is configured:
- *   https://{username}-{workspace_domain}
- *   e.g. https://admin-gsd-dev-local.letsme.run
- *
- * If no domain configured:
- *   http://localhost:{port}
+ * With WORKSPACE_DOMAIN: https://gsd-dev-local.nosclaw.com
+ * Without:               http://localhost:{port}
  */
 export async function getWorkspaceUrl(userId: number, username: string, port: number): Promise<string> {
   let domain = appEnv.workspaceDomain;
@@ -27,9 +24,8 @@ export async function getWorkspaceUrl(userId: number, username: string, port: nu
 
   if (domain) {
     const protocol = domain.includes("localhost") ? "http" : "https";
-    return `${protocol}://${username}-${domain}`;
+    return `${protocol}://${domain}`;
   }
 
-  // Fallback: direct port access
   return `http://localhost:${port}`;
 }

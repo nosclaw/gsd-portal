@@ -18,6 +18,10 @@ export default function AdminSettingsPage() {
   const [devEnvBranch, setDevEnvBranch] = useState("main");
   const [devEnvAutoInit, setDevEnvAutoInit] = useState(true);
   const [workspaceDomain, setWorkspaceDomain] = useState("");
+  const [portRangeStart, setPortRangeStart] = useState("30000");
+  const [portRangeEnd, setPortRangeEnd] = useState("39999");
+  const [defaultModel, setDefaultModel] = useState("arcee-ai/trinity-large-preview:free");
+  const [defaultThinkingLevel, setDefaultThinkingLevel] = useState("minimal");
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -28,6 +32,10 @@ export default function AdminSettingsPage() {
       setDevEnvBranch(data.settings?.dev_env_branch || "main");
       setDevEnvAutoInit(data.settings?.dev_env_auto_init !== false);
       setWorkspaceDomain(data.settings?.workspace_domain || "");
+      setPortRangeStart(String(data.settings?.port_range_start || 30000));
+      setPortRangeEnd(String(data.settings?.port_range_end || 39999));
+      setDefaultModel(data.settings?.default_model || "arcee-ai/trinity-large-preview:free");
+      setDefaultThinkingLevel(data.settings?.default_thinking_level || "minimal");
     } catch {
       // Ignore
     } finally {
@@ -50,7 +58,11 @@ export default function AdminSettingsPage() {
           dev_env_repo: devEnvRepo || undefined,
           dev_env_branch: devEnvBranch || "main",
           dev_env_auto_init: devEnvAutoInit,
-          workspace_domain: workspaceDomain || undefined
+          workspace_domain: workspaceDomain || undefined,
+          port_range_start: Number(portRangeStart) || 30000,
+          port_range_end: Number(portRangeEnd) || 39999,
+          default_model: defaultModel || "arcee-ai/trinity-large-preview:free",
+          default_thinking_level: defaultThinkingLevel || "minimal"
         })
       });
       if (res.ok) {
@@ -126,7 +138,7 @@ export default function AdminSettingsPage() {
               <div className="mt-4 border-t border-black/6 pt-5 dark:border-white/8">
                 <p className="text-sm font-medium">Workspace domain</p>
                 <p className="mt-1 text-xs text-muted">
-                  Set a base domain for workspace URLs. Each user gets <code className="rounded bg-black/5 px-1 dark:bg-white/8">{"{username}"}-{workspaceDomain || "domain"}</code>
+                  Set the workspace domain. All users share one domain, distinguished by their auth token: <code className="rounded bg-black/5 px-1 dark:bg-white/8">{workspaceDomain || "gsd.example.com"}</code>
                 </p>
                 <div className="mt-3">
                   <TextField>
@@ -140,7 +152,74 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 pt-2">
+              <div className="mt-4 border-t border-black/6 pt-5 dark:border-white/8">
+                <p className="text-sm font-medium">Port range</p>
+                <p className="mt-1 text-xs text-muted">
+                  GSD workspace port allocation range (30000–39999).
+                </p>
+                <div className="mt-3 flex gap-3">
+                  <TextField>
+                    <Input
+                      className="surface-soft rounded-xl"
+                      placeholder="30000"
+                      type="number"
+                      value={portRangeStart}
+                      onChange={(e) => setPortRangeStart(e.target.value)}
+                    />
+                  </TextField>
+                  <span className="flex items-center text-muted">—</span>
+                  <TextField>
+                    <Input
+                      className="surface-soft rounded-xl"
+                      placeholder="39999"
+                      type="number"
+                      value={portRangeEnd}
+                      onChange={(e) => setPortRangeEnd(e.target.value)}
+                    />
+                  </TextField>
+                </div>
+              </div>
+
+              <div className="mt-4 border-t border-black/6 pt-5 dark:border-white/8">
+                <p className="text-sm font-medium">Default AI model</p>
+                <p className="mt-1 text-xs text-muted">
+                  Default model and thinking level for new user workspaces.
+                </p>
+                <div className="mt-3 space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted">Model</label>
+                    <TextField>
+                      <Input
+                        className="surface-soft rounded-xl font-mono text-sm"
+                        placeholder="arcee-ai/trinity-large-preview:free"
+                        value={defaultModel}
+                        onChange={(e) => setDefaultModel(e.target.value)}
+                      />
+                    </TextField>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted">Thinking level</label>
+                    <div className="flex gap-2">
+                      {["off", "minimal", "medium", "high"].map((level) => (
+                        <button
+                          key={level}
+                          type="button"
+                          className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
+                            defaultThinkingLevel === level
+                              ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950"
+                              : "bg-black/5 text-muted hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10"
+                          }`}
+                          onClick={() => setDefaultThinkingLevel(level)}
+                        >
+                          {level}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-4">
                 <Button
                   className="rounded-full font-semibold"
                   variant="primary"
@@ -158,6 +237,8 @@ export default function AdminSettingsPage() {
           )}
         </CardContent>
       </Card>
+
     </div>
   );
 }
+

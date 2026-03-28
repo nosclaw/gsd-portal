@@ -1,8 +1,10 @@
+# ── Stage 1: Install dependencies ──
 FROM oven/bun:1-alpine AS deps
 WORKDIR /app
 COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile 2>/dev/null || bun install
 
+# ── Stage 2: Build application ──
 FROM oven/bun:1-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
@@ -11,25 +13,40 @@ ARG AUTH_SECRET="build-time-placeholder"
 ENV AUTH_SECRET=${AUTH_SECRET}
 RUN bun run build
 
-FROM node:22-alpine AS runner
-WORKDIR /app
+# ── Stage 3: Runtime base (system packages + GSD) ──
+# This stage runs IN PARALLEL with Stage 2 — no dependency between them.
+# Heavy installs cached here, only rebuilds when GSD version or system deps change.
+FROM node:22-slim AS runtime-base
 ENV NODE_ENV=production
-ENV HOSTNAME=0.0.0.0
-ENV PORT=3000
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      git curl tini ca-certificates && \
+    rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/*
+COPY deploy/scripts/install-gsd.sh /tmp/install-gsd.sh
+RUN chmod +x /tmp/install-gsd.sh && /tmp/install-gsd.sh && rm /tmp/install-gsd.sh
 
-# Install runtime dependencies and GSD CLI
-RUN apk add --no-cache git bash curl && npm install -g gsd-pi
+# ── Stage 4: Final image ──
+# Only COPY layers here — rebuilds in seconds on code changes.
+FROM runtime-base AS runner
+WORKDIR /app
+ENV HOSTNAME=0.0.0.0 PORT=3000
 
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+# Startup script
+RUN printf '#!/bin/sh\nif [ -f /app/ws-proxy.js ]; then node /app/ws-proxy.js & fi\nexec node server.js\n' > /app/start.sh && chmod +x /app/start.sh
 
-# External packages excluded from webpack bundle
+# External node_modules (changes on dependency updates)
 COPY --from=builder /app/node_modules/@libsql ./node_modules/@libsql
 COPY --from=builder /app/node_modules/libsql ./node_modules/libsql
 COPY --from=builder /app/node_modules/ws ./node_modules/ws
 COPY --from=builder /app/node_modules/bcryptjs ./node_modules/bcryptjs
 
-EXPOSE 3000
+# Static assets (changes on UI updates)
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
 
-CMD ["node", "server.js"]
+# Application code (changes most frequently — always last)
+COPY --from=builder /app/.next/standalone ./
+
+EXPOSE 3000 3001
+
+ENTRYPOINT ["tini", "-g", "--"]
+CMD ["/app/start.sh"]

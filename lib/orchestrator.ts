@@ -4,30 +4,54 @@ import { access, constants, readFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { eq, and, lt } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { workspaceInstances, workspaceSessions, auditLogs } from "@/lib/db/schema";
-import { appEnv } from "@/lib/env";
+import { users as usersSchema, workspaceInstances, workspaceSessions, auditLogs } from "@/lib/db/schema";
+import { appEnv, resolveWorkspaceDir } from "@/lib/env";
 import { mkdir } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { logger } from "@/lib/logger";
-import { encrypt } from "@/lib/crypto";
+import { encrypt, decrypt } from "@/lib/crypto";
 import { initDevEnv } from "@/lib/dev-env";
 
 const execFileAsync = promisify(execFile);
 
 const GSD_LAUNCH_TIMEOUT_MS = 60_000;
 
-const PORT_RANGE_START = 30000;
-const PORT_RANGE_END = 30999;
+const DEFAULT_PORT_START = 30000;
+const DEFAULT_PORT_END = 30009;
+
+/**
+ * Get port range and default model from tenant settings.
+ */
+async function getTenantConfig(userId: number) {
+  const db = await getDb();
+  const user = await db.query.users.findFirst({
+    where: eq(usersSchema.id, userId),
+    with: { tenant: true }
+  });
+  const s = (user?.tenant?.settings || {}) as any;
+  return {
+    portStart: s.port_range_start || DEFAULT_PORT_START,
+    portEnd: s.port_range_end || DEFAULT_PORT_END,
+    defaultModel: s.default_model || "anthropic/claude-sonnet-4",
+    defaultThinkingLevel: s.default_thinking_level || "off"
+  };
+}
 
 /**
  * Launch GSD --web and wait for the "Ready" line in stderr.
  * Returns the auth token extracted from the output.
  */
+interface GitConfig {
+  authorName: string;
+  authorEmail: string;
+  githubPat?: string | null;
+}
+
 function spawnGsdWeb(
   port: number,
   workspaceDir: string,
   username: string,
-  email: string | undefined
+  gitConfig: GitConfig
 ): Promise<{ authToken: string; webPid: number | null }> {
   return new Promise((resolvePromise, reject) => {
     // Build allowed origins for CORS
@@ -40,7 +64,7 @@ function spawnGsdWeb(
     const wsDomain = appEnv.workspaceDomain;
     if (wsDomain) {
       const protocol = wsDomain.includes("localhost") ? "http" : "https";
-      origins.push(`${protocol}://${username}-${wsDomain}`);
+      origins.push(`${protocol}://${wsDomain}`);
     }
 
     const args = [
@@ -56,10 +80,13 @@ function spawnGsdWeb(
       env: {
         ...process.env,
         HOME: workspaceDir,
-        GIT_AUTHOR_NAME: username,
-        GIT_AUTHOR_EMAIL: email ?? `${username}@nosclaw.local`,
-        GIT_COMMITTER_NAME: username,
-        GIT_COMMITTER_EMAIL: email ?? `${username}@nosclaw.local`
+        SHELL: "/bin/bash",
+        GSD_WEB_DAEMON_MODE: "1",
+        GIT_AUTHOR_NAME: gitConfig.authorName,
+        GIT_AUTHOR_EMAIL: gitConfig.authorEmail,
+        GIT_COMMITTER_NAME: gitConfig.authorName,
+        GIT_COMMITTER_EMAIL: gitConfig.authorEmail,
+        ...(gitConfig.githubPat ? { GITHUB_TOKEN: gitConfig.githubPat } : {})
       }
     });
 
@@ -144,31 +171,89 @@ export async function launchWorkspace(userId: number, username: string, email?: 
     return existing;
   }
 
-  // 2. Allocate port
+  // 2. Load tenant config and allocate port
+  const tenantConfig = await getTenantConfig(userId);
   const activeInstances = await db.query.workspaceInstances.findMany({
     where: eq(workspaceInstances.status, "RUNNING")
   });
   const usedPorts = new Set(activeInstances.map((i: { port: number }) => i.port));
-  let port = PORT_RANGE_START;
-  while (usedPorts.has(port) && port <= PORT_RANGE_END) {
+  let port = tenantConfig.portStart;
+  while (usedPorts.has(port) && port <= tenantConfig.portEnd) {
     port++;
   }
 
-  if (port > PORT_RANGE_END) {
+  if (port > tenantConfig.portEnd) {
     logger.error("Port range exhausted.", { userId, operation: "launchWorkspace" });
     throw new Error("No available ports for workspace.");
   }
 
-  // 3. Prepare workspace directory
-  const workspaceDir = resolve(appEnv.workspaceRootDir, username);
+  // 3. Prepare workspace directory (/home/{username})
+  const workspaceDir = resolveWorkspaceDir(username);
   await mkdir(workspaceDir, { recursive: true });
+  await mkdir(resolve(workspaceDir, "projects"), { recursive: true });
+  await mkdir(resolve(workspaceDir, ".gsd"), { recursive: true });
 
-  // 3.5 Initialize dev-env (clone repo + run setup.sh on first launch)
-  try {
-    await initDevEnv(userId, username, workspaceDir);
-  } catch (err: any) {
-    logger.warn("Dev-env initialization failed, continuing without it.", { userId, operation: "launchWorkspace", error: err.message });
+  // Lock devRoot to user's home — prevents GSD folder picker from escaping
+  const { writeFile, copyFile, access: fsAccess } = await import("node:fs/promises");
+  await writeFile(
+    resolve(workspaceDir, ".gsd", "web-preferences.json"),
+    JSON.stringify({ devRoot: workspaceDir }),
+    "utf8"
+  );
+
+  // ── GSD agent config initialization ──
+  // Priority: User's existing config > Admin shared config > System defaults
+  //
+  // auth.json:     User's own keys > Admin shared keys > placeholder
+  // settings.json: User's own settings > Admin tenant defaults > system defaults
+  const agentDir = resolve(workspaceDir, ".gsd", "agent");
+  await mkdir(agentDir, { recursive: true });
+
+  // Helper: read JSON file, return null if missing/empty/invalid
+  const readJson = async (path: string) => {
+    try {
+      const content = await readFile(path, "utf8");
+      const parsed = JSON.parse(content);
+      return parsed && typeof parsed === "object" && Object.keys(parsed).length > 0 ? parsed : null;
+    } catch { return null; }
+  };
+
+  // ── auth.json ──
+  const authFile = resolve(agentDir, "auth.json");
+  const existingAuth = await readJson(authFile);
+
+  if (!existingAuth) {
+    // User has no valid config → try admin shared → fallback
+    const sharedAuth = await readJson(resolve(appEnv.workspaceRootDir, ".shared-gsd-config", "auth.json"));
+    await writeFile(authFile, JSON.stringify(
+      sharedAuth || { openrouter: [{ type: "api_key", key: "CONFIGURE_YOUR_API_KEY" }] },
+      null, 2
+    ), "utf8");
   }
+  // else: user already has valid auth.json → don't touch
+
+  // ── settings.json ──
+  const settingsFile = resolve(agentDir, "settings.json");
+  const existingSettings = await readJson(settingsFile);
+
+  if (!existingSettings || !existingSettings.defaultProvider) {
+    // User has no valid settings → use tenant defaults
+    // Merge with existing to preserve any partial user config
+    const merged = {
+      ...(existingSettings || {}),
+      defaultProvider: existingSettings?.defaultProvider || "openrouter",
+      defaultModel: existingSettings?.defaultModel || tenantConfig.defaultModel,
+      defaultThinkingLevel: existingSettings?.defaultThinkingLevel || tenantConfig.defaultThinkingLevel,
+      quietStartup: true
+    };
+    await writeFile(settingsFile, JSON.stringify(merged, null, 2), "utf8");
+  }
+  // else: user already has valid settings → don't touch
+
+  // 3.5 Initialize dev-env in background (don't block workspace launch)
+  initDevEnv(userId, username).catch((err) => {
+    logger.warn("Dev-env initialization failed.", { userId, operation: "launchWorkspace", error: err.message });
+  });
 
   // 4. Update status to STARTING
   const [instance] = await db
@@ -183,7 +268,34 @@ export async function launchWorkspace(userId: number, username: string, email?: 
   try {
     // 5. Spawn GSD web server and wait for ready
     logger.info("Launching GSD web server.", { userId, operation: "launchWorkspace", port });
-    const { authToken } = await spawnGsdWeb(port, workspaceDir, username, email);
+    // Load user's git config from DB
+    const dbUser = await db.query.users.findFirst({
+      where: eq(usersSchema.id, userId)
+    });
+    let githubPat: string | null = null;
+    if (dbUser?.githubPat) {
+      try { githubPat = decrypt(dbUser.githubPat); } catch {}
+    }
+
+    const gitConfig: GitConfig = {
+      authorName: dbUser?.gitUsername || username,
+      authorEmail: dbUser?.gitEmail || email || `${username}@nosclaw.local`,
+      githubPat
+    };
+
+    // Write .gitconfig so git commands in terminal also use correct identity
+    const gitconfigContent = [
+      `[user]`,
+      `\tname = ${gitConfig.authorName}`,
+      `\temail = ${gitConfig.authorEmail}`,
+      ...(gitConfig.githubPat ? [
+        `[url "https://${gitConfig.githubPat}@github.com/"]`,
+        `\tinsteadOf = https://github.com/`
+      ] : [])
+    ].join("\n") + "\n";
+    await writeFile(resolve(workspaceDir, ".gitconfig"), gitconfigContent, "utf8");
+
+    const { authToken } = await spawnGsdWeb(port, workspaceDir, username, gitConfig);
 
     // 6. Find the actual web server PID
     const webPid = await findGsdWebPid(workspaceDir);
@@ -242,7 +354,7 @@ export async function stopWorkspace(userId: number, username: string) {
 
   if (!instance || !instance.pid) {
     // Try GSD's own stop mechanism
-    const workspaceDir = resolve(appEnv.workspaceRootDir, username);
+    const workspaceDir = resolveWorkspaceDir(username);
     try {
       await execFileAsync("gsd", ["--web", "stop", workspaceDir], { timeout: 10_000 });
     } catch {

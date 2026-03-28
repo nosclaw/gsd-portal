@@ -1,5 +1,4 @@
 services:
   portal:
     environment:
-      APP_BASE_URL: http://localhost:29000
       WORKSPACE_DOMAIN: ${WORKSPACE_DOMAIN:-}

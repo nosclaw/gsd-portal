@@ -17,7 +17,10 @@ const SCHEMA_SQL = [
     role TEXT NOT NULL DEFAULT 'MEMBER',
     status TEXT NOT NULL DEFAULT 'PENDING',
     tenant_id INTEGER REFERENCES tenants(id),
-    joined_at INTEGER NOT NULL DEFAULT (unixepoch())
+    joined_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    git_username TEXT,
+    git_email TEXT,
+    github_pat TEXT
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique ON users (username)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users (email)`,
@@ -57,9 +60,20 @@ const SCHEMA_SQL = [
   )`
 ];
 
+// Migrations for existing databases — add columns that might not exist
+const MIGRATIONS = [
+  "ALTER TABLE users ADD COLUMN git_username TEXT",
+  "ALTER TABLE users ADD COLUMN git_email TEXT",
+  "ALTER TABLE users ADD COLUMN github_pat TEXT"
+];
+
 export async function ensureSchema(db: any) {
   for (const stmt of SCHEMA_SQL) {
     await db.run(sql.raw(stmt));
+  }
+  // Run migrations (ignore "duplicate column" errors)
+  for (const migration of MIGRATIONS) {
+    try { await db.run(sql.raw(migration)); } catch {}
   }
   logger.info("Database schema ensured.", { operation: "ensureSchema" });
 }

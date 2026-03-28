@@ -11,7 +11,11 @@ export const tenants = sqliteTable("tenants", {
     dev_env_repo?: string;         // e.g. "https://github.com/nosclaw/dev-env.git"
     dev_env_branch?: string;       // e.g. "main"
     dev_env_auto_init?: boolean;   // auto-init on first workspace launch
-    workspace_domain?: string;     // e.g. "gsd.example.com" → {username}.gsd.example.com
+    workspace_domain?: string;     // e.g. "gsd.example.com"
+    port_range_start?: number;     // e.g. 30000
+    port_range_end?: number;       // e.g. 39999
+    default_model?: string;        // e.g. "arcee-ai/trinity-large-preview:free"
+    default_thinking_level?: string; // e.g. "minimal", "off", "medium", "high"
   }>()
 });
 
@@ -24,7 +28,10 @@ export const users = sqliteTable("users", {
   role: text("role").notNull().default("MEMBER"), // ROOT_ADMIN, TENANT_ADMIN, MEMBER
   status: text("status").notNull().default("PENDING"), // INVITED, PENDING, APPROVED, REJECTED, SUSPENDED
   tenantId: integer("tenant_id").references(() => tenants.id),
-  joinedAt: integer("joined_at", { mode: "timestamp" }).notNull().default(new Date())
+  joinedAt: integer("joined_at", { mode: "timestamp" }).notNull().default(new Date()),
+  gitUsername: text("git_username"),    // Git commit author name
+  gitEmail: text("git_email"),         // Git commit author email
+  githubPat: text("github_pat")        // GitHub Personal Access Token (encrypted)
 });
 
 export const workspaceInstances = sqliteTable("workspace_instances", {

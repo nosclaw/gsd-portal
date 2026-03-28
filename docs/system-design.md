@@ -264,5 +264,5 @@ src/
 ## 10. 待确认技术决策
 1. GSD 的 token 交换接口、refresh token 轮转规则和错误码是否稳定。
 2. Workspace Orchestrator 运行在 Portal 进程内是否足够，还是需要独立 worker 进程。
-3. Reverse Proxy 选用 Caddy 还是 Nginx。
-4. `nosclaw/dev-env/setup.sh` 是否需要首次启动和后续启动区分执行模式。
+3. ~~Reverse Proxy 选用 Caddy 还是 Nginx。~~ **已决定：不使用独立反向代理，Portal 内置子域名/路径代理，配合 Cloudflare Tunnel 实现域名映射。**
+4. ~~`nosclaw/dev-env/setup.sh` 是否需要首次启动和后续启动区分执行模式。~~ **已实现：首次 clone + 执行，后续可通过 UI 手动更新。**

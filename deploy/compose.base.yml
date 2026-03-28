@@ -4,13 +4,10 @@ services:
       context: ..
       dockerfile: Dockerfile
     restart: unless-stopped
+    stop_grace_period: 3s
     ports:
-      # Portal Web UI
       - ${PORTAL_PUBLIC_PORT:-29000}:3000
-      # GSD workspace ports
-      - 30000-30999:30000-30999
-      # User dev application ports
-      - 40000-40099:40000-40099
+      - ${WS_PROXY_PORT:-29001}:3001
     environment:
       NODE_ENV: production
       HOSTNAME: 0.0.0.0
@@ -20,16 +17,20 @@ services:
       AUTH_URL: ${APP_BASE_URL:-http://localhost:29000}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:29000}
       RUNTIME_ROOT_DIR: /app/.runtime
-      WORKSPACE_ROOT_DIR: workspaces
+      WORKSPACE_ROOT_DIR: /home
+      DEV_ENV_DIR: /opt/dev-env
       SQLITE_DB_PATH: data/portal.db
       LOG_ROOT_DIR: logs
       IDLE_RECLAIM_MINUTES: ${IDLE_RECLAIM_MINUTES:-60}
       SESSION_REFRESH_LEEWAY_SECONDS: ${SESSION_REFRESH_LEEWAY_SECONDS:-120}
       WORKSPACE_DOMAIN: ${WORKSPACE_DOMAIN:-}
+      WS_PROXY_PORT: 3001
     volumes:
       - .storage/portal_sqlite_data:/app/.runtime/data
-      - .storage/portal_workspaces:/app/.runtime/workspaces
+      - .storage/portal_workspaces:/home
+      - .storage/portal_dev_env:/opt/dev-env
       - .storage/portal_logs:/app/.runtime/logs
+      - ./ws-proxy.js:/app/ws-proxy.js:ro
     healthcheck:
       test:
         [

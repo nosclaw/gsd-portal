@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { users, tenants, devEnvVersions, auditLogs } from "@/lib/db/schema";
 import { logger } from "@/lib/logger";
+import { appEnv, resolveWorkspaceDir } from "@/lib/env";
 
 const execFileAsync = promisify(execFile);
 const SETUP_TIMEOUT_MS = 300_000; // 5 minutes for setup.sh
@@ -37,10 +38,10 @@ export async function getDevEnvConfig(userId: number): Promise<DevEnvConfig | nu
 }
 
 /**
- * Get the dev-env directory path for a workspace.
+ * Get the dev-env directory path (shared location, outside workspace).
  */
-export function getDevEnvDir(workspaceDir: string): string {
-  return join(workspaceDir, "dev-env");
+export function getDevEnvDir(): string {
+  return appEnv.devEnvDir;
 }
 
 /**
@@ -74,41 +75,58 @@ async function getRemoteCommit(dir: string, branch: string): Promise<string> {
  * Initialize dev-env for a user's workspace (first-time clone + setup.sh).
  * No-op if already initialized.
  */
-export async function initDevEnv(userId: number, username: string, workspaceDir: string): Promise<void> {
+export async function initDevEnv(userId: number, username: string): Promise<void> {
   const config = await getDevEnvConfig(userId);
   if (!config) {
     logger.debug("No dev-env repo configured, skipping init.", { userId, operation: "initDevEnv" });
     return;
   }
 
-  const devEnvDir = getDevEnvDir(workspaceDir);
+  const devEnvDir = getDevEnvDir();
+  let alreadyCloned = false;
 
-  // Check if already cloned
+  // Check if already cloned by a previous user
   try {
     await access(join(devEnvDir, ".git"), constants.R_OK);
-    logger.info("Dev-env already cloned, skipping init.", { userId, operation: "initDevEnv" });
-    return;
+    alreadyCloned = true;
   } catch {
-    // Not cloned yet — proceed
+    // Not cloned yet
   }
 
-  logger.info("Cloning dev-env repo.", { userId, operation: "initDevEnv", repo: config.repoUrl, branch: config.branch });
-
-  // Clone
-  await execFileAsync("git", [
-    "clone",
-    "--branch", config.branch,
-    "--single-branch",
-    "--depth", "1",
-    config.repoUrl,
-    devEnvDir
-  ], { cwd: workspaceDir, timeout: 60_000 });
+  if (alreadyCloned) {
+    // Pull latest (another user already cloned)
+    logger.info("Dev-env already cloned, pulling latest.", { userId, operation: "initDevEnv" });
+    try {
+      await execFileAsync("git", ["pull", "origin", config.branch], { cwd: devEnvDir, timeout: 60_000 });
+    } catch (e: any) {
+      logger.warn("Dev-env pull failed, using existing version.", { userId, operation: "initDevEnv", error: e.message });
+    }
+  } else {
+    // First clone
+    logger.info("Cloning dev-env repo.", { userId, operation: "initDevEnv", repo: config.repoUrl, branch: config.branch });
+    await execFileAsync("git", [
+      "clone",
+      "--branch", config.branch,
+      "--single-branch",
+      "--depth", "1",
+      config.repoUrl,
+      devEnvDir
+    ], { timeout: 60_000 });
+  }
 
   const commit = await getGitCommit(devEnvDir);
-  logger.info("Dev-env cloned.", { userId, operation: "initDevEnv", commit });
+  logger.info("Dev-env ready.", { userId, operation: "initDevEnv", commit, wasCloned: !alreadyCloned });
 
-  // Run setup.sh
-  await runSetupScript(devEnvDir, workspaceDir, userId, username);
+  // Check if this user already ran setup
+  const existingVersion = await getDevEnvVersion(userId);
+  if (existingVersion) {
+    logger.info("User already initialized, skipping setup.sh.", { userId, operation: "initDevEnv" });
+    return;
+  }
+
+  // Run setup.sh (HOME = user's workspace dir)
+  const userWorkspace = resolveWorkspaceDir(username);
+  await runSetupScript(devEnvDir, userWorkspace, userId, username);
 
   // Record version
   const db = await getDb();
@@ -134,13 +152,13 @@ export async function initDevEnv(userId: number, username: string, workspaceDir:
 /**
  * Update dev-env to the latest version (git pull + re-run setup.sh).
  */
-export async function updateDevEnv(userId: number, username: string, workspaceDir: string): Promise<{ previousCommit: string; newCommit: string; updated: boolean }> {
+export async function updateDevEnv(userId: number, username: string): Promise<{ previousCommit: string; newCommit: string; updated: boolean }> {
   const config = await getDevEnvConfig(userId);
   if (!config) {
     throw new Error("No dev-env repo configured for this tenant.");
   }
 
-  const devEnvDir = getDevEnvDir(workspaceDir);
+  const devEnvDir = getDevEnvDir();
 
   // Verify it's cloned
   try {
@@ -163,7 +181,8 @@ export async function updateDevEnv(userId: number, username: string, workspaceDi
   }
 
   // Re-run setup.sh
-  await runSetupScript(devEnvDir, workspaceDir, userId, username);
+  const userWorkspace = resolveWorkspaceDir(username);
+  await runSetupScript(devEnvDir, userWorkspace, userId, username);
 
   // Update version record
   const db = await getDb();
@@ -201,11 +220,11 @@ export async function updateDevEnv(userId: number, username: string, workspaceDi
 /**
  * Check if an update is available without pulling.
  */
-export async function checkDevEnvUpdate(userId: number, workspaceDir: string): Promise<{ currentCommit: string; latestCommit: string; updateAvailable: boolean } | null> {
+export async function checkDevEnvUpdate(userId: number): Promise<{ currentCommit: string; latestCommit: string; updateAvailable: boolean } | null> {
   const config = await getDevEnvConfig(userId);
   if (!config) return null;
 
-  const devEnvDir = getDevEnvDir(workspaceDir);
+  const devEnvDir = getDevEnvDir();
 
   try {
     await access(join(devEnvDir, ".git"), constants.R_OK);

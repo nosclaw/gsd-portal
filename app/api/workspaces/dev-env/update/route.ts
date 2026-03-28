@@ -1,6 +1,4 @@
 import { auth } from "@/auth";
-import { resolve } from "node:path";
-import { appEnv } from "@/lib/env";
 import { updateDevEnv } from "@/lib/dev-env";
 import { NextResponse } from "next/server";
 
@@ -10,11 +8,9 @@ export const POST = auth(async (req) => {
   }
 
   const user = req.auth.user as any;
-  const userId = Number(user.id);
-  const workspaceDir = resolve(appEnv.workspaceRootDir, user.username);
 
   try {
-    const result = await updateDevEnv(userId, user.username, workspaceDir);
+    const result = await updateDevEnv(Number(user.id), user.username);
     return NextResponse.json(result);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to update dev-env.";

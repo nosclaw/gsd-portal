@@ -1,7 +1,14 @@
 node_modules
 .next
+out
+dist
 .runtime
+.storage
+.git
+.DS_Store
 docs
 ui
+coverage
+deploy/.storage
 *.log
 

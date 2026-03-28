@@ -179,6 +179,6 @@ deploy/
 3. 本文档不要求 CI/CD 在 MVP 一起完成。
 
 ## 12. 待确认事项
-1. 反向代理最终选型是 Caddy 还是 Nginx。
+1. ~~反向代理最终选型是 Caddy 还是 Nginx。~~ **已决定：Portal 内置代理 + Cloudflare Tunnel，无需独立反向代理。**
 2. MVP 是否需要自动备份脚本，还是先提供手工备份流程。
 3. `portal` 容器内部是否需要额外的 watchdog 机制来回收孤儿 GSD 进程。

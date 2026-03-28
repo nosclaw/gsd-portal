@@ -39,6 +39,7 @@ export const GET = auth(async (req) => {
     );
   }
 
+  // Redirect to workspace URL with token in hash (hash stays client-side, never sent to server)
   const baseUrl = await getWorkspaceUrl(Number(user.id), user.username, instance.port);
   return NextResponse.redirect(`${baseUrl}/#token=${accessToken}`);
 });
