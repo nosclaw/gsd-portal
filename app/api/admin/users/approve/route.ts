@@ -22,7 +22,7 @@ export const POST = auth(async (req) => {
 
   // Get target user info before update
   const targetUser = await db.query.users.findFirst({
-    where: and(eq(users.id, userId), eq(users.tenantId, actor.tenantId))
+    where: and(eq(users.id, userId), eq(users.tenantId, Number(actor.tenantId)))
   });
 
   if (!targetUser) {
@@ -32,7 +32,7 @@ export const POST = auth(async (req) => {
   await db
     .update(users)
     .set({ status })
-    .where(and(eq(users.id, userId), eq(users.tenantId, actor.tenantId)));
+    .where(and(eq(users.id, userId), eq(users.tenantId, Number(actor.tenantId))));
 
   // When suspending or rejecting, forcibly stop workspace and revoke session
   if (status === UserStatus.SUSPENDED || status === UserStatus.REJECTED) {

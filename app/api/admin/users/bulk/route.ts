@@ -32,7 +32,7 @@ export const POST = auth(async (req) => {
   const targetUsers = await db.query.users.findMany({
     where: and(
       inArray(users.id, userIds),
-      eq(users.tenantId, actor.tenantId)
+      eq(users.tenantId, Number(actor.tenantId))
     )
   });
 
