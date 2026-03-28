@@ -82,11 +82,13 @@ function spawnGsdWeb(
         HOME: workspaceDir,
         SHELL: "/bin/bash",
         GSD_WEB_DAEMON_MODE: "1",
+        GSD_FIRST_RUN_BANNER: "0",
+        PI_SKIP_VERSION_CHECK: "1",
         GIT_AUTHOR_NAME: gitConfig.authorName,
         GIT_AUTHOR_EMAIL: gitConfig.authorEmail,
         GIT_COMMITTER_NAME: gitConfig.authorName,
         GIT_COMMITTER_EMAIL: gitConfig.authorEmail,
-        ...(gitConfig.githubPat ? { GITHUB_TOKEN: gitConfig.githubPat } : {})
+        ...(gitConfig.githubPat ? { GITHUB_TOKEN: gitConfig.githubPat, GH_TOKEN: gitConfig.githubPat } : {})
       }
     });
 
