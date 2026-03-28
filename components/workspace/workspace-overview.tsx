@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { CardSkeleton } from "@/components/shared/page-skeleton";
 import { StatusChip } from "@/components/shared/status-chip";
+import { WorkspaceStatus } from "@/lib/types";
 
 type ActionType = "launch" | "stop" | "restart" | null;
 
@@ -115,8 +116,8 @@ export function WorkspaceOverview() {
   }
 
   const { instance, session, workspaceUrl, idleTimeoutAt } = data;
-  const isRunning = instance?.status === "RUNNING";
-  const isLaunching = ["STARTING", "PREPARING", "INITIALIZING", "SPAWNING"].includes(instance?.status);
+  const isRunning = instance?.status === WorkspaceStatus.RUNNING;
+  const isLaunching = [WorkspaceStatus.STARTING, WorkspaceStatus.PREPARING, WorkspaceStatus.INITIALIZING, WorkspaceStatus.SPAWNING].includes(instance?.status);
   const isStarting = isLaunching;
   const displayUrl = workspaceUrl || (isRunning ? `${window.location.hostname}:${instance.port}` : null);
 
@@ -126,10 +127,10 @@ export function WorkspaceOverview() {
 
   // Launch progress steps
   const LAUNCH_STEPS = [
-    { key: "PREPARING", label: "Preparing directory" },
-    { key: "INITIALIZING", label: "Initializing dev-env" },
-    { key: "SPAWNING", label: "Starting GSD" },
-    { key: "RUNNING", label: "Ready" }
+    { key: WorkspaceStatus.PREPARING, label: "Preparing directory" },
+    { key: WorkspaceStatus.INITIALIZING, label: "Initializing dev-env" },
+    { key: WorkspaceStatus.SPAWNING, label: "Starting GSD" },
+    { key: WorkspaceStatus.RUNNING, label: "Ready" }
   ];
   const currentStepIndex = LAUNCH_STEPS.findIndex((s) => s.key === instance?.status);
 
@@ -142,7 +143,7 @@ export function WorkspaceOverview() {
             GSD Workspace
           </h3>
         </div>
-        <StatusChip status={instance?.status || "STOPPED"} />
+        <StatusChip status={instance?.status || WorkspaceStatus.STOPPED} />
       </CardHeader>
       <CardContent className="space-y-6 px-6 pb-6 pt-0">
         {error && (
@@ -314,7 +315,7 @@ export function WorkspaceOverview() {
           <div className="mt-3 space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted">Status</span>
-              <span className="font-medium">{instance?.status || "STOPPED"}</span>
+              <span className="font-medium">{instance?.status || WorkspaceStatus.STOPPED}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted">Port</span>

@@ -357,11 +357,12 @@ export async function launchWorkspace(userId: number, username: string, email?: 
 
     logger.info("Workspace launched successfully.", { userId, operation: "launchWorkspace", resource: `workspace:${username}`, port, pid: webPid });
     return { ...instance, pid: webPid, status: WorkspaceStatus.RUNNING };
-  } catch (error: any) {
-    logger.error("Workspace launch failed.", { userId, operation: "launchWorkspace", resource: `workspace:${username}`, error: error.message });
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : "Unknown error";
+    logger.error("Workspace launch failed.", { userId, operation: "launchWorkspace", resource: `workspace:${username}`, error: errMsg });
     await db
       .update(workspaceInstances)
-      .set({ status: WorkspaceStatus.ERROR, error: error.message })
+      .set({ status: WorkspaceStatus.ERROR, error: errMsg })
       .where(eq(workspaceInstances.id, instance.id));
 
     throw error;

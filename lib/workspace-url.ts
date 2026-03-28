@@ -19,7 +19,7 @@ export async function getWorkspaceUrl(userId: number, username: string, port: nu
       where: eq(users.id, userId),
       with: { tenant: true }
     });
-    domain = (dbUser?.tenant?.settings as any)?.workspace_domain || "";
+    domain = dbUser?.tenant?.settings?.workspace_domain || "";
   }
 
   if (domain) {

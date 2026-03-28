@@ -51,7 +51,7 @@ export function CommandPalette() {
 
   const select = useCallback((href: string) => {
     close();
-    router.push(href as any);
+    router.push(href as Parameters<typeof router.push>[0]);
   }, [close, router]);
 
   // Keyboard shortcut to open

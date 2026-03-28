@@ -74,11 +74,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       // If user was marked expired (suspended/rejected), invalidate session
       if (token.expired) {
-        return { ...session, user: undefined } as typeof session;
+        return { ...session, user: undefined } as unknown as typeof session;
       }
 
       if (session.user) {
-        const user = session.user as Record<string, unknown>;
+        const user = session.user as unknown as Record<string, unknown>;
         user.role = token.role;
         user.email = token.email;
         user.username = token.username;

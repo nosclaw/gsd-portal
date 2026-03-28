@@ -1,6 +1,9 @@
 import { sql } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import { logger } from "@/lib/logger";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- init functions run raw SQL and don't use schema types
+type AnyDb = BaseSQLiteDatabase<"async", any, any>;
 
 const SCHEMA_SQL = [
   `CREATE TABLE IF NOT EXISTS tenants (
@@ -82,7 +85,7 @@ const MIGRATIONS = [
   )`
 ];
 
-export async function ensureSchema(db: LibSQLDatabase) {
+export async function ensureSchema(db: AnyDb) {
   for (const stmt of SCHEMA_SQL) {
     await db.run(sql.raw(stmt));
   }
@@ -93,9 +96,9 @@ export async function ensureSchema(db: LibSQLDatabase) {
   logger.info("Database schema ensured.", { operation: "ensureSchema" });
 }
 
-export async function seedIfEmpty(db: LibSQLDatabase) {
-  const result = await db.all(sql.raw(`SELECT COUNT(*) as count FROM tenants`));
-  const count = result?.[0]?.count ?? result?.rows?.[0]?.count ?? 0;
+export async function seedIfEmpty(db: AnyDb) {
+  const result = await db.all(sql.raw(`SELECT COUNT(*) as count FROM tenants`)) as Record<string, unknown>[];
+  const count = (result?.[0] as Record<string, unknown>)?.count ?? 0;
 
   if (Number(count) > 0) {
     return;

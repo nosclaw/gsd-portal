@@ -22,7 +22,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <SessionProvider>
-      <RouterProvider navigate={(path: string) => router.push(path as any)}>
+      <RouterProvider navigate={(path: string) => router.push(path as Parameters<typeof router.push>[0])}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
           {children}
           <ThemedToaster />

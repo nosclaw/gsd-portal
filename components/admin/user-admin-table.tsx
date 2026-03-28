@@ -16,10 +16,12 @@ import { ConfirmModal } from "@/components/shared/confirm-modal";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/shared/table-controls";
 import { useTable } from "@/lib/use-table";
 import { exportToCsv } from "@/lib/csv-export";
+import type { PortalUser } from "@/lib/types";
+import { UserStatus, UserRole, WorkspaceStatus } from "@/lib/types";
 
 export function UserAdminTable() {
   const { data: session } = useSession();
-  const currentUser = session?.user as any;
+  const currentUser = session?.user as PortalUser | undefined;
   const [users, setUsers] = useState<any[]>([]);
   const [workspaces, setWorkspaces] = useState<Record<number, string>>({}); // userId → status
   const [loading, setLoading] = useState(true);
@@ -209,7 +211,7 @@ export function UserAdminTable() {
 
   const toggleSelectAll = () => {
     const selectableIds = table.rows
-      .filter((r: any) => !isSelf(r.id) && r.role !== "ROOT_ADMIN")
+      .filter((r: any) => !isSelf(r.id) && r.role !== UserRole.ROOT_ADMIN)
       .map((r: any) => r.id);
     const allSelected = selectableIds.every((id: number) => selectedIds.has(id));
     if (allSelected) {
@@ -226,8 +228,8 @@ export function UserAdminTable() {
   }, []);
 
   const isSelf = (userId: number) => currentUser?.id && Number(currentUser.id) === userId;
-  const isRootAdmin = (role: string) => role === "ROOT_ADMIN";
-  const isCurrentRootAdmin = currentUser?.role === "ROOT_ADMIN";
+  const isRootAdmin = (role: string) => role === UserRole.ROOT_ADMIN;
+  const isCurrentRootAdmin = currentUser?.role === UserRole.ROOT_ADMIN;
 
   const table = useTable({
     data: users,
@@ -318,7 +320,7 @@ export function UserAdminTable() {
                       type="checkbox"
                       className="rounded"
                       checked={table.rows.length > 0 && table.rows
-                        .filter((r: any) => !isSelf(r.id) && r.role !== "ROOT_ADMIN")
+                        .filter((r: any) => !isSelf(r.id) && r.role !== UserRole.ROOT_ADMIN)
                         .every((r: any) => selectedIds.has(r.id))}
                       onChange={toggleSelectAll}
                     />
@@ -374,12 +376,12 @@ export function UserAdminTable() {
                             </p>
                             <div className="flex items-center gap-1.5">
                               <p className="text-xs text-muted">@{row.username}</p>
-                              {workspaces[row.id] === "RUNNING" && (
+                              {workspaces[row.id] === WorkspaceStatus.RUNNING && (
                                 <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500" />
                               )}
                             </div>
                           </div>
-                          {workspaces[row.id] === "RUNNING" && (
+                          {workspaces[row.id] === WorkspaceStatus.RUNNING && (
                             <Button
                               isIconOnly
                               className="ml-auto rounded-full text-muted hover:text-primary"
@@ -402,16 +404,16 @@ export function UserAdminTable() {
                             className="rounded-full text-muted hover:text-primary"
                             size="sm"
                             variant="ghost"
-                            aria-label={row.role === "TENANT_ADMIN" ? "Demote to Member" : "Promote to Admin"}
+                            aria-label={row.role === UserRole.TENANT_ADMIN ? "Demote to Member" : "Promote to Admin"}
                             onPress={() => setRoleTarget({
                               id: row.id,
                               name: row.name,
                               username: row.username,
                               currentRole: row.role,
-                              newRole: row.role === "TENANT_ADMIN" ? "MEMBER" : "TENANT_ADMIN"
+                              newRole: row.role === UserRole.TENANT_ADMIN ? UserRole.MEMBER : UserRole.TENANT_ADMIN
                             })}
                           >
-                            {row.role === "TENANT_ADMIN"
+                            {row.role === UserRole.TENANT_ADMIN
                               ? <ShieldOff className="h-3.5 w-3.5" />
                               : <Shield className="h-3.5 w-3.5" />
                             }
@@ -427,7 +429,7 @@ export function UserAdminTable() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex flex-wrap items-center gap-2">
-                          {row.status === "PENDING" && (
+                          {row.status === UserStatus.PENDING && (
                             <>
                               <Button
                                 className="rounded-full"
@@ -449,7 +451,7 @@ export function UserAdminTable() {
                               </Button>
                             </>
                           )}
-                          {row.status === "APPROVED" && !isSelf(row.id) && (
+                          {row.status === UserStatus.APPROVED && !isSelf(row.id) && (
                             <Button
                               className="rounded-full"
                               size="sm"
@@ -460,7 +462,7 @@ export function UserAdminTable() {
                               {actionLoading === `${row.id}-suspend` ? "..." : "Suspend"}
                             </Button>
                           )}
-                          {row.status === "SUSPENDED" && (
+                          {row.status === UserStatus.SUSPENDED && (
                             <Button
                               className="rounded-full"
                               size="sm"
@@ -471,7 +473,7 @@ export function UserAdminTable() {
                               {actionLoading === `${row.id}-approve` ? "..." : "Reactivate"}
                             </Button>
                           )}
-                          {row.status === "REJECTED" && (
+                          {row.status === UserStatus.REJECTED && (
                             <Button
                               className="rounded-full"
                               size="sm"
@@ -484,8 +486,8 @@ export function UserAdminTable() {
                           )}
 
                           {/* Workspace start/stop — for approved users */}
-                          {row.status === "APPROVED" && !isSelf(row.id) && (
-                            workspaces[row.id] === "RUNNING" ? (
+                          {row.status === UserStatus.APPROVED && !isSelf(row.id) && (
+                            workspaces[row.id] === WorkspaceStatus.RUNNING ? (
                               <Button
                                 isIconOnly
                                 className="rounded-full text-muted hover:text-danger"
@@ -540,7 +542,7 @@ export function UserAdminTable() {
                             </Button>
                           )}
 
-                          {isSelf(row.id) && row.status === "APPROVED" && (
+                          {isSelf(row.id) && row.status === UserStatus.APPROVED && (
                             <span className="text-xs text-muted">Cannot modify own account</span>
                           )}
                         </div>
@@ -581,16 +583,16 @@ export function UserAdminTable() {
         open={!!roleTarget}
         onClose={() => setRoleTarget(null)}
         onConfirm={handleRoleChange}
-        title={roleTarget?.newRole === "TENANT_ADMIN"
+        title={roleTarget?.newRole === UserRole.TENANT_ADMIN
           ? `Promote ${roleTarget?.name} to Admin?`
           : `Demote ${roleTarget?.name} to Member?`
         }
-        description={roleTarget?.newRole === "TENANT_ADMIN"
+        description={roleTarget?.newRole === UserRole.TENANT_ADMIN
           ? `@${roleTarget?.username} will be able to approve users, manage workspaces, view audit logs, and access admin settings.`
           : `@${roleTarget?.username} will lose admin access and only be able to use their own workspace.`
         }
-        confirmText={roleTarget?.newRole === "TENANT_ADMIN" ? "Promote to Admin" : "Demote to Member"}
-        variant={roleTarget?.newRole === "TENANT_ADMIN" ? "warning" : "danger"}
+        confirmText={roleTarget?.newRole === UserRole.TENANT_ADMIN ? "Promote to Admin" : "Demote to Member"}
+        variant={roleTarget?.newRole === UserRole.TENANT_ADMIN ? "warning" : "danger"}
         loading={roleLoading}
       />
     </>
