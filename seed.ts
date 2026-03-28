@@ -11,7 +11,7 @@ async function seed() {
   const [tenant] = await db
     .insert(tenants)
     .values({
-      name: "Nosclaw Team",
+      name: "GSD Team",
       status: "ACTIVE",
       settings: { allow_registration: true, idle_timeout_minutes: 60 }
     })

@@ -279,7 +279,7 @@ export async function launchWorkspace(userId: number, username: string, email?: 
 
     const gitConfig: GitConfig = {
       authorName: dbUser?.gitUsername || username,
-      authorEmail: dbUser?.gitEmail || email || `${username}@nosclaw.local`,
+      authorEmail: dbUser?.gitEmail || email || `${username}@gsd.local`,
       githubPat
     };
 

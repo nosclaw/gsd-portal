@@ -1,4 +1,0 @@
-services:
-  portal:
-    environment:
-      WORKSPACE_DOMAIN: ${WORKSPACE_DOMAIN:-}

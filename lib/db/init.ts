@@ -92,7 +92,7 @@ export async function seedIfEmpty(db: any) {
   const bcrypt = await import("bcryptjs");
 
   await db.run(sql.raw(
-    `INSERT INTO tenants (name, status, settings) VALUES ('Nosclaw Team', 'ACTIVE', '{"allow_registration":true,"idle_timeout_minutes":60,"dev_env_repo":"https://github.com/nosclaw/dev-env.git","dev_env_branch":"main","dev_env_auto_init":true}')`
+    `INSERT INTO tenants (name, status, settings) VALUES ('GSD Team', 'ACTIVE', '{"allow_registration":true,"idle_timeout_minutes":60,"dev_env_repo":"https://github.com/nosclaw/dev-env.git","dev_env_branch":"main","dev_env_auto_init":true}')`
   ));
 
   const hashedPassword = await bcrypt.hash("admin123", 10);

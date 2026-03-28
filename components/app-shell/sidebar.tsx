@@ -71,7 +71,7 @@ export function Sidebar() {
         <div className="mt-3 flex items-end justify-between">
           <div>
             <p className="max-w-[120px] truncate text-lg font-semibold">
-              {user?.tenantName || "Nosclaw"}
+              {user?.tenantName || "GSD"}
             </p>
             <p className="text-sm text-white/70">{user?.role || "Member"}</p>
           </div>
