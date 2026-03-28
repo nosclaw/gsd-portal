@@ -38,7 +38,7 @@ export function Topbar() {
   const handleLaunchGsd = async () => {
     router.push("/workspace");
     try {
-      await fetch("/api/workspaces/launch", { method: "POST" });
+      await fetch("/api/workspaces/launch", { method: "POST", headers: { "Content-Type": "application/json" } });
     } catch {
       // Navigation already happened, workspace page will show error
     }

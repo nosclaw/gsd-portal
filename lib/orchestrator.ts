@@ -126,7 +126,7 @@ export async function launchWorkspace(userId: number, username: string, email?: 
       workspaceDir
     ], {
       detached: true,
-      stdio: "ignore",
+      stdio: ["ignore", "ignore", "pipe"],
       cwd: workspaceDir,
       env: {
         ...process.env,
@@ -138,6 +138,25 @@ export async function launchWorkspace(userId: number, username: string, email?: 
         GIT_AUTHOR_EMAIL: email ?? `${username}@nosclaw.local`,
         GIT_COMMITTER_NAME: username,
         GIT_COMMITTER_EMAIL: email ?? `${username}@nosclaw.local`
+      }
+    });
+
+    // Capture stderr for diagnostics
+    let stderrOutput = "";
+    if (child.stderr) {
+      child.stderr.setEncoding("utf8");
+      child.stderr.on("data", (chunk: string) => {
+        stderrOutput += chunk;
+        logger.debug("GSD stderr: " + chunk.trim(), { userId, operation: "launchWorkspace", port });
+      });
+    }
+
+    child.on("exit", (code, signal) => {
+      if (code !== null && code !== 0) {
+        logger.error("GSD process exited unexpectedly.", {
+          userId, operation: "launchWorkspace", port, exitCode: code, signal,
+          stderr: stderrOutput.slice(0, 1000)
+        });
       }
     });
 

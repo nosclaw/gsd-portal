@@ -11,7 +11,9 @@ const statusStyles: Record<
   REJECTED: { color: "danger", variant: "soft" },
   SUSPENDED: { color: "danger", variant: "secondary" },
   RUNNING: { color: "success", variant: "secondary" },
+  STARTING: { color: "warning", variant: "secondary" },
   STOPPED: { color: "default", variant: "soft" },
+  ERROR: { color: "danger", variant: "soft" },
   REVOKED: { color: "danger", variant: "secondary" },
   SUCCESS: { color: "success", variant: "soft" },
   FAILURE: { color: "danger", variant: "soft" },
@@ -19,7 +21,10 @@ const statusStyles: Record<
   Healthy: { color: "success", variant: "soft" },
   Review: { color: "warning", variant: "soft" },
   Watching: { color: "warning", variant: "soft" },
-  Ready: { color: "success", variant: "soft" }
+  Ready: { color: "success", variant: "soft" },
+  Idle: { color: "default", variant: "soft" },
+  None: { color: "default", variant: "soft" },
+  Clear: { color: "success", variant: "soft" }
 };
 
 export function StatusChip({ status }: { status: string }) {

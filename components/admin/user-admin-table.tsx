@@ -8,34 +8,61 @@ import {
   CardHeader,
   Spinner
 } from "@heroui/react";
+import { useSession } from "next-auth/react";
 
 import { StatusChip } from "@/components/shared/status-chip";
 
 export function UserAdminTable() {
+  const { data: session } = useSession();
+  const currentUser = session?.user as any;
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const fetchUsers = async () => {
     setLoading(true);
-    const res = await fetch("/api/admin/users");
-    const data = await res.json();
-    if (Array.isArray(data)) {
-      setUsers(data);
+    try {
+      const res = await fetch("/api/admin/users");
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setUsers(data);
+      }
+    } catch {
+      // silently fail
     }
     setLoading(false);
   };
 
-  const handleAction = async (userId: number, action: string) => {
-    await fetch("/api/admin/users/approve", {
-      method: "POST",
-      body: JSON.stringify({ userId, action })
-    });
-    fetchUsers();
+  const handleAction = async (userId: number, action: string, userName: string) => {
+    const actionLabels: Record<string, string> = {
+      approve: "approve",
+      reject: "reject",
+      suspend: "suspend"
+    };
+
+    const confirmed = window.confirm(
+      `Are you sure you want to ${actionLabels[action] || action} user "${userName}"?`
+    );
+    if (!confirmed) return;
+
+    setActionLoading(`${userId}-${action}`);
+    try {
+      await fetch("/api/admin/users/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, action })
+      });
+      await fetchUsers();
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  const isSelf = (userId: number) => currentUser?.id && Number(currentUser.id) === userId;
 
   return (
     <Card className="surface">
@@ -70,41 +97,82 @@ export function UserAdminTable() {
                 </tr>
               ) : (
                 users.map((row) => (
-                  <tr key={row.username} className="border-t border-black/6 dark:border-white/8">
+                  <tr key={row.id} className="border-t border-black/6 dark:border-white/8">
                     <td className="px-4 py-4">
                       <div>
-                        <p className="font-medium">{row.name}</p>
+                        <p className="font-medium">
+                          {row.name}
+                          {isSelf(row.id) && <span className="ml-1 text-xs text-muted">(you)</span>}
+                        </p>
                         <p className="text-xs text-muted">@{row.username}</p>
                       </div>
                     </td>
-                    <td className="px-4 py-4">{row.role}</td>
+                    <td className="px-4 py-4 text-sm">{row.role}</td>
                     <td className="px-4 py-4">
                       <StatusChip status={row.status} />
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-4 text-sm">
                       {new Date(row.joinedAt).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex flex-wrap gap-2">
                         {row.status === "PENDING" && (
-                          <Button
-                            className="rounded-full"
-                            size="sm"
-                            variant="primary"
-                            onPress={() => handleAction(row.id, "approve")}
-                          >
-                            Approve
-                          </Button>
+                          <>
+                            <Button
+                              className="rounded-full"
+                              size="sm"
+                              variant="primary"
+                              isDisabled={actionLoading !== null}
+                              onPress={() => handleAction(row.id, "approve", row.name)}
+                            >
+                              {actionLoading === `${row.id}-approve` ? "..." : "Approve"}
+                            </Button>
+                            <Button
+                              className="rounded-full"
+                              size="sm"
+                              variant="danger-soft"
+                              isDisabled={actionLoading !== null}
+                              onPress={() => handleAction(row.id, "reject", row.name)}
+                            >
+                              {actionLoading === `${row.id}-reject` ? "..." : "Reject"}
+                            </Button>
+                          </>
                         )}
-                        {row.status !== "SUSPENDED" && (
+                        {row.status === "APPROVED" && !isSelf(row.id) && (
                           <Button
                             className="rounded-full"
                             size="sm"
                             variant="danger-soft"
-                            onPress={() => handleAction(row.id, "suspend")}
+                            isDisabled={actionLoading !== null}
+                            onPress={() => handleAction(row.id, "suspend", row.name)}
                           >
-                            Suspend
+                            {actionLoading === `${row.id}-suspend` ? "..." : "Suspend"}
                           </Button>
+                        )}
+                        {row.status === "SUSPENDED" && (
+                          <Button
+                            className="rounded-full"
+                            size="sm"
+                            variant="primary"
+                            isDisabled={actionLoading !== null}
+                            onPress={() => handleAction(row.id, "approve", row.name)}
+                          >
+                            {actionLoading === `${row.id}-approve` ? "..." : "Reactivate"}
+                          </Button>
+                        )}
+                        {row.status === "REJECTED" && (
+                          <Button
+                            className="rounded-full"
+                            size="sm"
+                            variant="primary"
+                            isDisabled={actionLoading !== null}
+                            onPress={() => handleAction(row.id, "approve", row.name)}
+                          >
+                            {actionLoading === `${row.id}-approve` ? "..." : "Approve"}
+                          </Button>
+                        )}
+                        {isSelf(row.id) && row.status === "APPROVED" && (
+                          <span className="text-xs text-muted">Cannot modify own account</span>
                         )}
                       </div>
                     </td>

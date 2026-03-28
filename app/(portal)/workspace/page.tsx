@@ -7,7 +7,7 @@ import { WorkspaceOverview } from "@/components/workspace/workspace-overview";
 export default function WorkspacePage() {
   const handleReconnect = useCallback(async () => {
     try {
-      const res = await fetch("/api/workspaces/reconnect", { method: "POST" });
+      const res = await fetch("/api/workspaces/reconnect", { method: "POST", headers: { "Content-Type": "application/json" } });
       if (res.ok) {
         window.location.reload();
       }

@@ -3,9 +3,10 @@
 node_modules
 .next
 out
-.runtime
 .DS_Store
 coverage
 dist
 *.log
+.env
+.env.local
 

@@ -51,7 +51,10 @@ export function WorkspaceAdminTable() {
     return () => clearInterval(interval);
   }, [fetchWorkspaces]);
 
-  const handleForceStop = async (userId: number) => {
+  const handleForceStop = async (userId: number, userName: string) => {
+    const confirmed = window.confirm(`Force stop workspace for "${userName}"?`);
+    if (!confirmed) return;
+
     setStoppingId(userId);
     try {
       await fetch("/api/admin/workspaces/stop", {
@@ -125,7 +128,7 @@ export function WorkspaceAdminTable() {
                   size="sm"
                   variant="danger-soft"
                   isDisabled={stoppingId === ws.userId}
-                  onPress={() => handleForceStop(ws.userId)}
+                  onPress={() => handleForceStop(ws.userId, ws.name)}
                 >
                   <Power className="h-3 w-3" />
                   {stoppingId === ws.userId ? "Stopping..." : "Force stop"}

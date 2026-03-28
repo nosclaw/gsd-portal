@@ -41,11 +41,20 @@ export function WorkspaceOverview() {
 
   const handleAction = async (action: ActionType) => {
     if (!action) return;
+
+    if (action === "stop") {
+      const confirmed = window.confirm("Are you sure you want to stop the workspace?");
+      if (!confirmed) return;
+    }
+
     setActiveAction(action);
     setError(null);
 
     try {
-      const res = await fetch(`/api/workspaces/${action}`, { method: "POST" });
+      const res = await fetch(`/api/workspaces/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
       const json = await res.json();
 
       if (!res.ok) {
