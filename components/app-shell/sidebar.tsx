@@ -61,7 +61,7 @@ export function Sidebar() {
           <BellDot className="h-5 w-5" />
         </div>
         <div>
-          <p className="text-sm font-semibold tracking-wide">Nosclaw Portal</p>
+          <p className="text-sm font-semibold tracking-wide">GSD Portal</p>
           <p className="text-xs text-muted">GSD command center</p>
         </div>
       </div>
