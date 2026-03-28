@@ -30,8 +30,9 @@ FROM runtime-base AS runner
 WORKDIR /app
 ENV HOSTNAME=0.0.0.0 PORT=3000
 
-# Startup script
-RUN printf '#!/bin/sh\nif [ -f /app/ws-proxy.js ]; then node /app/ws-proxy.js & fi\nexec node server.js\n' > /app/start.sh && chmod +x /app/start.sh
+# Startup script (checks node-pty on boot in case GSD was updated)
+COPY deploy/scripts/rebuild-pty.sh /usr/local/bin/rebuild-pty
+RUN printf '#!/bin/sh\nrebuild-pty 2>/dev/null || true\nif [ -f /app/ws-proxy.js ]; then node /app/ws-proxy.js & fi\nexec node server.js\n' > /app/start.sh && chmod +x /app/start.sh
 
 # External node_modules (changes on dependency updates)
 COPY --from=builder /app/node_modules/@libsql ./node_modules/@libsql

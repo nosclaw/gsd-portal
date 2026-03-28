@@ -28,9 +28,7 @@ if [ -d "$PTY_DIR" ]; then
     mkdir -p "prebuilds/linux-$ARCH"
     cp build/Release/pty.node "prebuilds/linux-$ARCH/pty.node"
 
-    # Remove build tools
-    apt-get purge -y python3 make g++
-    apt-get autoremove -y
+    # Keep build tools for future GSD updates (node-pty needs recompile)
     rm -rf /var/lib/apt/lists/*
   fi
 
