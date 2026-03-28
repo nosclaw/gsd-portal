@@ -2,25 +2,19 @@ import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { workspaceInstances, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
-
-const ADMIN_ROLES = ["ROOT_ADMIN", "TENANT_ADMIN"];
+import { apiError, apiSuccess } from "@/lib/api-response";
+import type { PortalUser } from "@/lib/types";
+import { ADMIN_ROLES } from "@/lib/types";
 
 export const GET = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json(
-      { error: { code: "UNAUTHORIZED", message: "Authentication required." } },
-      { status: 401 }
-    );
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const user = req.auth.user as any;
+  const user = req.auth.user as PortalUser;
 
   if (!ADMIN_ROLES.includes(user.role)) {
-    return NextResponse.json(
-      { error: { code: "FORBIDDEN", message: "Admin access required." } },
-      { status: 403 }
-    );
+    return apiError("FORBIDDEN", "Admin access required.", 403);
   }
 
   const db = await getDb();
@@ -41,5 +35,5 @@ export const GET = auth(async (req) => {
     .from(workspaceInstances)
     .leftJoin(users, eq(workspaceInstances.userId, users.id));
 
-  return NextResponse.json(instances);
+  return apiSuccess(instances);
 });

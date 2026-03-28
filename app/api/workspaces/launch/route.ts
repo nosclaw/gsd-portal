@@ -1,25 +1,20 @@
 import { auth } from "@/auth";
 import { launchWorkspace } from "@/lib/orchestrator";
-import { NextResponse } from "next/server";
+import { apiError, apiSuccess } from "@/lib/api-response";
+import type { PortalUser } from "@/lib/types";
 
 export const POST = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json(
-      { error: { code: "UNAUTHORIZED", message: "Authentication required." } },
-      { status: 401 }
-    );
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const user = req.auth.user as any;
+  const user = req.auth.user as PortalUser;
 
   try {
     const instance = await launchWorkspace(Number(user.id), user.username, user.email);
-    return NextResponse.json(instance);
+    return apiSuccess(instance);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to launch workspace.";
-    return NextResponse.json(
-      { error: { code: "LAUNCH_FAILED", message } },
-      { status: 500 }
-    );
+    return apiError("LAUNCH_FAILED", message, 500);
   }
 });

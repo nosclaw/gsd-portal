@@ -61,8 +61,8 @@ async function runCycle() {
       if (session) {
         try {
           token = decrypt(session.accessToken);
-        } catch {
-          // Token decrypt failed — will be handled by refresh
+        } catch (err) {
+          logger.debug("Token decrypt failed during heartbeat check.", { userId: instance.userId, error: String(err) });
         }
       }
 

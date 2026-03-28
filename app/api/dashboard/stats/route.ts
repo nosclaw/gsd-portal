@@ -2,23 +2,24 @@ import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { workspaceInstances, workspaceSessions, users, auditLogs } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { apiError, apiSuccess } from "@/lib/api-response";
+import { WorkspaceStatus, UserStatus } from "@/lib/types";
 
 export const GET = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
   const db = await getDb();
 
   // Count running workspaces
   const runningInstances = await db.query.workspaceInstances.findMany({
-    where: eq(workspaceInstances.status, "RUNNING")
+    where: eq(workspaceInstances.status, WorkspaceStatus.RUNNING)
   });
 
   // Count pending approvals
   const pendingUsers = await db.query.users.findMany({
-    where: eq(users.status, "PENDING")
+    where: eq(users.status, UserStatus.PENDING)
   });
 
   // Count total users
@@ -68,7 +69,7 @@ export const GET = auth(async (req) => {
     }
   ];
 
-  return NextResponse.json({
+  return apiSuccess({
     metrics: {
       activeWorkspaces: runningInstances.length,
       totalUsers: allUsers.length,

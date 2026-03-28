@@ -4,25 +4,28 @@ import { workspaceInstances } from "@/lib/db/schema";
 import { getGsdSession } from "@/lib/session-broker";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/api-response";
+import type { PortalUser } from "@/lib/types";
+import { WorkspaceStatus } from "@/lib/types";
 
 async function handleProxy(req: Request) {
   const session = await auth();
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const user = session.user as any;
+  const user = session.user as PortalUser;
   const db = await getDb();
 
   const instance = await db.query.workspaceInstances.findFirst({
     where: and(
       eq(workspaceInstances.userId, Number(user.id)),
-      eq(workspaceInstances.status, "RUNNING")
+      eq(workspaceInstances.status, WorkspaceStatus.RUNNING)
     )
   });
 
   if (!instance) {
-    return NextResponse.json({ error: "No running workspace." }, { status: 404 });
+    return apiError("NO_RUNNING_WORKSPACE", "No running workspace.", 404);
   }
 
   let accessToken: string;
@@ -30,7 +33,7 @@ async function handleProxy(req: Request) {
     const gsdSession = await getGsdSession(Number(user.id));
     accessToken = gsdSession.accessToken;
   } catch {
-    return NextResponse.json({ error: "Session expired. Please reconnect." }, { status: 401 });
+    return apiError("SESSION_EXPIRED", "Session expired. Please reconnect.", 401);
   }
 
   // Strip the /api/workspaces/proxy prefix and forward to GSD
@@ -60,7 +63,7 @@ async function handleProxy(req: Request) {
       headers: responseHeaders
     });
   } catch {
-    return NextResponse.json({ error: "Failed to reach workspace." }, { status: 502 });
+    return apiError("PROXY_FAILED", "Failed to reach workspace.", 502);
   }
 }
 

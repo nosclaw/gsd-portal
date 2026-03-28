@@ -3,6 +3,8 @@ import { workspaceInstances, workspaceSessions } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
+import { apiError } from "@/lib/api-response";
 
 /**
  * Resolve the GSD port from the Authorization Bearer token.
@@ -31,8 +33,8 @@ async function resolvePortByToken(authHeader: string | null): Promise<{ port: nu
           return { port: instance.port, accessToken: decrypted };
         }
       }
-    } catch {
-      // Decrypt failed, try next
+    } catch (err) {
+      logger.debug("Token decrypt failed during port resolution, trying next session.", { error: String(err) });
     }
   }
   return null;
@@ -63,13 +65,13 @@ async function handleProxy(req: Request) {
     accessToken = resolved.accessToken;
   }
 
-  // For requests without auth (initial HTML load, static assets) → use any running GSD
+  // For requests without auth (initial HTML load, static assets) -> use any running GSD
   if (!targetPort) {
     targetPort = await getAnyRunningPort();
   }
 
   if (!targetPort) {
-    return NextResponse.json({ error: "No running workspace." }, { status: 404 });
+    return apiError("NO_RUNNING_WORKSPACE", "No running workspace.", 404);
   }
 
   // Strip internal query params
@@ -102,7 +104,7 @@ async function handleProxy(req: Request) {
       headers: responseHeaders
     });
   } catch {
-    return NextResponse.json({ error: "Failed to reach workspace." }, { status: 502 });
+    return apiError("PROXY_FAILED", "Failed to reach workspace.", 502);
   }
 }
 

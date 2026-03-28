@@ -3,44 +3,37 @@ import { getDb } from "@/lib/db";
 import { workspaceInstances } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { refreshGsdSession } from "@/lib/session-broker";
-import { NextResponse } from "next/server";
+import { apiError, apiSuccess } from "@/lib/api-response";
+import type { PortalUser } from "@/lib/types";
+import { WorkspaceStatus } from "@/lib/types";
 
 export const POST = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json(
-      { error: { code: "UNAUTHORIZED", message: "Authentication required." } },
-      { status: 401 }
-    );
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const user = req.auth.user as any;
+  const user = req.auth.user as PortalUser;
   const db = await getDb();
 
   const instance = await db.query.workspaceInstances.findFirst({
     where: and(
       eq(workspaceInstances.userId, Number(user.id)),
-      eq(workspaceInstances.status, "RUNNING")
+      eq(workspaceInstances.status, WorkspaceStatus.RUNNING)
     )
   });
 
   if (!instance) {
-    return NextResponse.json(
-      { error: { code: "NO_RUNNING_WORKSPACE", message: "No running workspace to reconnect." } },
-      { status: 404 }
-    );
+    return apiError("NO_RUNNING_WORKSPACE", "No running workspace to reconnect.", 404);
   }
 
   try {
     const session = await refreshGsdSession(Number(user.id), instance.port);
-    return NextResponse.json({
+    return apiSuccess({
       success: true,
       session: { expiresAt: session.expiresAt }
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to reconnect session.";
-    return NextResponse.json(
-      { error: { code: "RECONNECT_FAILED", message } },
-      { status: 500 }
-    );
+    return apiError("RECONNECT_FAILED", message, 500);
   }
 });

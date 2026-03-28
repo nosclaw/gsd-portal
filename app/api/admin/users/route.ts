@@ -3,13 +3,15 @@ import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq, like, or, sql, asc, desc } from "drizzle-orm";
 import { apiError, apiSuccess } from "@/lib/api-response";
+import type { PortalUser } from "@/lib/types";
+import { UserRole } from "@/lib/types";
 
 export const GET = auth(async (req) => {
-  if (!req.auth || (req.auth.user as any).role === "MEMBER") {
+  if (!req.auth || (req.auth.user as PortalUser).role === UserRole.MEMBER) {
     return apiError("FORBIDDEN", "Admin access required.", 403);
   }
 
-  const user = req.auth.user as any;
+  const user = req.auth.user as PortalUser;
   const db = await getDb();
 
   const url = new URL(req.url);

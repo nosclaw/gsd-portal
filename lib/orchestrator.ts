@@ -154,8 +154,8 @@ async function findGsdWebPid(workspaceDir: string): Promise<number | null> {
         return record.pid as number;
       }
     }
-  } catch {
-    // Registry might not exist yet
+  } catch (err) {
+    logger.debug("GSD web-instances registry not found.", { error: String(err), operation: "findGsdPid" });
   }
   return null;
 }
@@ -226,7 +226,7 @@ export async function launchWorkspace(userId: number, username: string, email?: 
       const content = await readFile(path, "utf8");
       const parsed = JSON.parse(content);
       return parsed && typeof parsed === "object" && Object.keys(parsed).length > 0 ? parsed : null;
-    } catch { return null; }
+    } catch (err) { logger.debug("Failed to read JSON file.", { error: String(err) }); return null; }
   };
 
   // ── auth.json ──
@@ -291,7 +291,7 @@ export async function launchWorkspace(userId: number, username: string, email?: 
     });
     let githubPat: string | null = null;
     if (dbUser?.githubPat) {
-      try { githubPat = decrypt(dbUser.githubPat); } catch {}
+      try { githubPat = decrypt(dbUser.githubPat); } catch (err) { logger.warn("Failed to decrypt GitHub PAT.", { userId, error: String(err) }); }
     }
 
     const gitConfig: GitConfig = {
@@ -382,8 +382,8 @@ export async function stopWorkspace(userId: number, username: string) {
     const workspaceDir = resolveWorkspaceDir(username);
     try {
       await execFileAsync("gsd", ["--web", "stop", workspaceDir], { timeout: 10_000 });
-    } catch {
-      // Ignore — might not be running
+    } catch (err) {
+      logger.debug("GSD stop command failed — workspace may not be running.", { error: String(err), operation: "stopWorkspace" });
     }
 
     if (instance) {
@@ -399,8 +399,8 @@ export async function stopWorkspace(userId: number, username: string) {
 
   try {
     process.kill(instance.pid, "SIGTERM");
-  } catch {
-    // Already gone
+  } catch (err) {
+    logger.debug("Process already gone.", { pid: instance.pid, error: String(err), operation: "stopWorkspace" });
   }
 
   await db
@@ -439,14 +439,15 @@ export async function stopAllWorkspaces() {
   const db = await getDb();
   const running = await db.query.workspaceInstances.findMany({
     with: { user: true },
-    where: eq(workspaceInstances.status, "RUNNING")
-  } as any);
+    where: eq(workspaceInstances.status, WorkspaceStatus.RUNNING)
+  }) as Array<{ userId: number; user: { username: string } }>;
 
   for (const instance of running) {
     try {
       await stopWorkspace(instance.userId, instance.user.username);
-    } catch (err: any) {
-      logger.warn("Failed to stop workspace during shutdown.", { userId: instance.userId, error: err.message });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      logger.warn("Failed to stop workspace during shutdown.", { userId: instance.userId, error: message });
     }
   }
 
@@ -456,7 +457,7 @@ export async function stopAllWorkspaces() {
 export async function syncWorkspaceStates() {
   const db = await getDb();
   const activeInstances = await db.query.workspaceInstances.findMany({
-    where: eq(workspaceInstances.status, "RUNNING")
+    where: eq(workspaceInstances.status, WorkspaceStatus.RUNNING)
   });
 
   for (const instance of activeInstances) {
@@ -467,7 +468,7 @@ export async function syncWorkspaceStates() {
         logger.warn("Stale workspace detected, marking as STOPPED.", { operation: "syncWorkspaceStates", resource: `workspace:${instance.id}`, pid: instance.pid });
         await db
           .update(workspaceInstances)
-          .set({ status: "STOPPED", pid: null })
+          .set({ status: WorkspaceStatus.STOPPED, pid: null })
           .where(eq(workspaceInstances.id, instance.id));
       }
     }

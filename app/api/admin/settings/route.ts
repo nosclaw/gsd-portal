@@ -3,15 +3,15 @@ import { getDb } from "@/lib/db";
 import { tenants, auditLogs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { apiError, apiSuccess } from "@/lib/api-response";
-
-const ADMIN_ROLES = ["ROOT_ADMIN", "TENANT_ADMIN"];
+import type { PortalUser } from "@/lib/types";
+import { ADMIN_ROLES } from "@/lib/types";
 
 export const GET = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
     return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const user = req.auth.user as any;
+  const user = req.auth.user as PortalUser;
   if (!ADMIN_ROLES.includes(user.role)) {
     return apiError("FORBIDDEN", "Admin access required.", 403);
   }
@@ -36,7 +36,7 @@ export const PUT = auth(async (req) => {
     return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const user = req.auth.user as any;
+  const user = req.auth.user as PortalUser;
   if (!ADMIN_ROLES.includes(user.role)) {
     return apiError("FORBIDDEN", "Admin access required.", 403);
   }
@@ -52,7 +52,7 @@ export const PUT = auth(async (req) => {
     return apiError("NOT_FOUND", "Tenant not found.", 404);
   }
 
-  const currentSettings = (tenant.settings ?? {}) as any;
+  const currentSettings = tenant.settings ?? {};
   const updatedSettings = { ...currentSettings, ...body };
 
   await db

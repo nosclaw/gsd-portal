@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { statfs } from "node:fs";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
@@ -7,6 +6,8 @@ import { eq } from "drizzle-orm";
 import { appEnv, assertWritable, ensureRuntimePaths } from "@/lib/env";
 import { getDb } from "@/lib/db";
 import { workspaceInstances } from "@/lib/db/schema";
+import { logger } from "@/lib/logger";
+import { apiError, apiSuccess } from "@/lib/api-response";
 
 const statfsAsync = promisify(statfs);
 const execFileAsync = promisify(execFile);
@@ -28,8 +29,8 @@ export async function GET() {
         totalBytes: total,
         usedPercent: Math.round(((total - available) / total) * 100)
       };
-    } catch {
-      // Disk check non-fatal
+    } catch (err) {
+      logger.debug("Disk space check failed.", { error: String(err), operation: "healthReady" });
     }
 
     // GSD CLI version
@@ -37,8 +38,8 @@ export async function GET() {
     try {
       const { stdout } = await execFileAsync("gsd", ["--version"], { timeout: 5000 });
       gsdVersion = stdout.trim();
-    } catch {
-      // GSD not available
+    } catch (err) {
+      logger.debug("GSD CLI not available.", { error: String(err), operation: "healthReady" });
     }
 
     // Active workspace count
@@ -49,11 +50,11 @@ export async function GET() {
         where: eq(workspaceInstances.status, "RUNNING")
       });
       activeWorkspaces = running.length;
-    } catch {
-      // DB check non-fatal
+    } catch (err) {
+      logger.debug("DB check failed during health ready.", { error: String(err), operation: "healthReady" });
     }
 
-    return NextResponse.json({
+    return apiSuccess({
       status: "ready",
       appBaseUrl: appEnv.appBaseUrl,
       workspaceRootDir: appEnv.workspaceRootDir,
@@ -66,12 +67,10 @@ export async function GET() {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    return NextResponse.json(
-      {
-        status: "not-ready",
-        error: error instanceof Error ? error.message : "Unknown error"
-      },
-      { status: 503 }
+    return apiError(
+      "NOT_READY",
+      error instanceof Error ? error.message : "Unknown error",
+      503
     );
   }
 }

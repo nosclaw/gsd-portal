@@ -28,7 +28,7 @@ export async function getDevEnvConfig(userId: number): Promise<DevEnvConfig | nu
 
   if (!user?.tenant?.settings) return null;
 
-  const settings = user.tenant.settings as any;
+  const settings = user.tenant.settings;
   if (!settings.dev_env_repo) return null;
 
   return {
@@ -89,8 +89,8 @@ export async function initDevEnv(userId: number, username: string): Promise<void
   try {
     await access(join(devEnvDir, ".git"), constants.R_OK);
     alreadyCloned = true;
-  } catch {
-    // Not cloned yet
+  } catch (err) {
+    logger.debug("Dev-env not yet cloned.", { userId, error: String(err), operation: "initDevEnv" });
   }
 
   if (alreadyCloned) {
@@ -163,7 +163,8 @@ export async function updateDevEnv(userId: number, username: string): Promise<{ 
   // Verify it's cloned
   try {
     await access(join(devEnvDir, ".git"), constants.R_OK);
-  } catch {
+  } catch (err) {
+    logger.warn("Dev-env not initialized.", { userId, error: String(err), operation: "updateDevEnv" });
     throw new Error("Dev-env not initialized. Launch workspace first.");
   }
 
@@ -228,7 +229,8 @@ export async function checkDevEnvUpdate(userId: number): Promise<{ currentCommit
 
   try {
     await access(join(devEnvDir, ".git"), constants.R_OK);
-  } catch {
+  } catch (err) {
+    logger.debug("Dev-env not cloned, skipping update check.", { userId, error: String(err), operation: "checkDevEnvUpdate" });
     return null;
   }
 
@@ -236,7 +238,8 @@ export async function checkDevEnvUpdate(userId: number): Promise<{ currentCommit
     const currentCommit = await getGitCommit(devEnvDir);
     const latestCommit = await getRemoteCommit(devEnvDir, config.branch);
     return { currentCommit, latestCommit, updateAvailable: currentCommit !== latestCommit };
-  } catch {
+  } catch (err) {
+    logger.debug("Failed to check dev-env update.", { userId, error: String(err), operation: "checkDevEnvUpdate" });
     return null;
   }
 }

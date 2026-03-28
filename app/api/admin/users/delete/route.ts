@@ -4,28 +4,31 @@ import { users, workspaceInstances, workspaceSessions, devEnvVersions, auditLogs
 import { resolveWorkspaceDir } from "@/lib/env";
 import { stopWorkspace } from "@/lib/orchestrator";
 import { revokeGsdSession } from "@/lib/session-broker";
+import { logger } from "@/lib/logger";
 import { eq, and } from "drizzle-orm";
 import { rm } from "node:fs/promises";
-import { NextResponse } from "next/server";
+import { apiError, apiSuccess } from "@/lib/api-response";
+import type { PortalUser } from "@/lib/types";
+import { UserRole } from "@/lib/types";
 
 export const POST = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const actor = req.auth.user as any;
-  if (actor.role !== "ROOT_ADMIN" && actor.role !== "TENANT_ADMIN") {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  const actor = req.auth.user as PortalUser;
+  if (actor.role !== UserRole.ROOT_ADMIN && actor.role !== UserRole.TENANT_ADMIN) {
+    return apiError("FORBIDDEN", "Admin access required.", 403);
   }
 
   const { userId } = await req.json();
   if (!userId) {
-    return NextResponse.json({ error: "userId is required." }, { status: 400 });
+    return apiError("MISSING_FIELDS", "userId is required.", 400);
   }
 
   // Cannot delete yourself
   if (Number(actor.id) === Number(userId)) {
-    return NextResponse.json({ error: "Cannot delete your own account." }, { status: 400 });
+    return apiError("INVALID_OPERATION", "Cannot delete your own account.", 400);
   }
 
   const db = await getDb();
@@ -35,44 +38,46 @@ export const POST = auth(async (req) => {
   });
 
   if (!targetUser) {
-    return NextResponse.json({ error: "User not found." }, { status: 404 });
+    return apiError("NOT_FOUND", "User not found.", 404);
   }
 
   // Cannot delete ROOT_ADMIN
-  if (targetUser.role === "ROOT_ADMIN") {
-    return NextResponse.json({ error: "Cannot delete root admin." }, { status: 403 });
+  if (targetUser.role === UserRole.ROOT_ADMIN) {
+    return apiError("FORBIDDEN", "Cannot delete root admin.", 403);
   }
 
   // 1. Stop workspace if running
   try {
     await stopWorkspace(targetUser.id, targetUser.username);
     await revokeGsdSession(targetUser.id);
-  } catch {
-    // May not be running
+  } catch (err) {
+    logger.debug("Workspace may not be running during user deletion.", { userId: targetUser.id, error: String(err) });
   }
 
   // 2. Delete workspace directory
   try {
     const workspaceDir = resolveWorkspaceDir(targetUser.username);
     await rm(workspaceDir, { recursive: true, force: true });
-  } catch {
-    // Directory may not exist
+  } catch (err) {
+    logger.debug("Workspace directory may not exist.", { userId: targetUser.id, error: String(err) });
   }
 
-  // 3. Delete related DB records
-  await db.delete(workspaceSessions).where(eq(workspaceSessions.userId, targetUser.id));
-  await db.delete(workspaceInstances).where(eq(workspaceInstances.userId, targetUser.id));
-  await db.delete(devEnvVersions).where(eq(devEnvVersions.userId, targetUser.id));
-  await db.delete(users).where(eq(users.id, targetUser.id));
+  // 3. Delete related DB records in a transaction
+  await db.transaction(async (tx) => {
+    await tx.delete(workspaceSessions).where(eq(workspaceSessions.userId, targetUser.id));
+    await tx.delete(workspaceInstances).where(eq(workspaceInstances.userId, targetUser.id));
+    await tx.delete(devEnvVersions).where(eq(devEnvVersions.userId, targetUser.id));
+    await tx.delete(users).where(eq(users.id, targetUser.id));
 
-  // 4. Audit log
-  await db.insert(auditLogs).values({
-    actor: actor.username,
-    action: "USER_DELETED",
-    resource: `user:${targetUser.username}`,
-    result: "SUCCESS",
-    metadata: { deletedUserId: targetUser.id, deletedUsername: targetUser.username }
+    // 4. Audit log
+    await tx.insert(auditLogs).values({
+      actor: actor.username,
+      action: "USER_DELETED",
+      resource: `user:${targetUser.username}`,
+      result: "SUCCESS",
+      metadata: { deletedUserId: targetUser.id, deletedUsername: targetUser.username }
+    });
   });
 
-  return NextResponse.json({ success: true });
+  return apiSuccess({ success: true });
 });

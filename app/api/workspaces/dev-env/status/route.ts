@@ -1,13 +1,13 @@
 import { auth } from "@/auth";
 import { getDevEnvVersion, getDevEnvConfig, checkDevEnvUpdate } from "@/lib/dev-env";
-import { NextResponse } from "next/server";
+import { apiError, apiSuccess } from "@/lib/api-response";
 
 export const GET = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const userId = Number((req.auth.user as any).id);
+  const userId = Number((req.auth.user as { id: string }).id);
 
   const [config, version, updateInfo] = await Promise.all([
     getDevEnvConfig(userId),
@@ -15,7 +15,7 @@ export const GET = auth(async (req) => {
     checkDevEnvUpdate(userId)
   ]);
 
-  return NextResponse.json({
+  return apiSuccess({
     configured: !!config,
     repo: config?.repoUrl ?? null,
     branch: config?.branch ?? null,

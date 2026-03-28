@@ -1,17 +1,18 @@
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
-import { encrypt, decrypt } from "@/lib/crypto";
+import { encrypt } from "@/lib/crypto";
 import { eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
 import { sanitizeUserInput } from "@/lib/sanitize";
+import { apiError, apiSuccess } from "@/lib/api-response";
+import type { PortalUser } from "@/lib/types";
 
 export const GET = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const userId = Number((req.auth.user as any).id);
+  const userId = Number((req.auth.user as PortalUser).id);
   const db = await getDb();
 
   const user = await db.query.users.findFirst({
@@ -19,10 +20,10 @@ export const GET = auth(async (req) => {
   });
 
   if (!user) {
-    return NextResponse.json({ error: "User not found." }, { status: 404 });
+    return apiError("NOT_FOUND", "User not found.", 404);
   }
 
-  return NextResponse.json({
+  return apiSuccess({
     gitUsername: user.gitUsername || "",
     gitEmail: user.gitEmail || "",
     hasGithubPat: !!user.githubPat
@@ -31,15 +32,15 @@ export const GET = auth(async (req) => {
 
 export const PUT = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const userId = Number((req.auth.user as any).id);
+  const userId = Number((req.auth.user as PortalUser).id);
   const raw = await req.json();
   const body = sanitizeUserInput(raw, ["gitUsername", "gitEmail"]);
   const db = await getDb();
 
-  const updates: any = {};
+  const updates: Record<string, string | null> = {};
 
   if (body.gitUsername !== undefined) updates.gitUsername = body.gitUsername || null;
   if (body.gitEmail !== undefined) updates.gitEmail = body.gitEmail || null;
@@ -48,10 +49,10 @@ export const PUT = auth(async (req) => {
   }
 
   if (Object.keys(updates).length === 0) {
-    return NextResponse.json({ error: "No fields to update." }, { status: 400 });
+    return apiError("MISSING_FIELDS", "No fields to update.", 400);
   }
 
   await db.update(users).set(updates).where(eq(users.id, userId));
 
-  return NextResponse.json({ success: true });
+  return apiSuccess({ success: true });
 });

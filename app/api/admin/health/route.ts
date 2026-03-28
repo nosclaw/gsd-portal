@@ -3,25 +3,26 @@ import { getDb } from "@/lib/db";
 import { workspaceInstances, auditLogs } from "@/lib/db/schema";
 import { eq, and, gte, like, or } from "drizzle-orm";
 import { statfs } from "node:fs/promises";
-import { NextResponse } from "next/server";
-
-const ADMIN_ROLES = ["ROOT_ADMIN", "TENANT_ADMIN"];
+import { logger } from "@/lib/logger";
+import { apiError, apiSuccess } from "@/lib/api-response";
+import type { PortalUser } from "@/lib/types";
+import { ADMIN_ROLES, WorkspaceStatus } from "@/lib/types";
 
 export const GET = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const user = req.auth.user as any;
+  const user = req.auth.user as PortalUser;
   if (!ADMIN_ROLES.includes(user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return apiError("FORBIDDEN", "Admin access required.", 403);
   }
 
   const db = await getDb();
 
   // Active workspaces
   const running = await db.query.workspaceInstances.findMany({
-    where: eq(workspaceInstances.status, "RUNNING")
+    where: eq(workspaceInstances.status, WorkspaceStatus.RUNNING)
   });
   const activeWorkspaces = running.length;
 
@@ -45,19 +46,19 @@ export const GET = auth(async (req) => {
     const total = stats.bsize * stats.blocks;
     const free = stats.bsize * stats.bfree;
     diskUsage = { total, used: total - free, free };
-  } catch {
-    // /home may not exist on all systems, try root
+  } catch (err) {
+    logger.debug("Could not stat /home, trying /.", { error: String(err) });
     try {
       const stats = await statfs("/");
       const total = stats.bsize * stats.blocks;
       const free = stats.bsize * stats.bfree;
       diskUsage = { total, used: total - free, free };
-    } catch {
-      // Ignore
+    } catch (err2) {
+      logger.warn("Could not determine disk usage.", { error: String(err2) });
     }
   }
 
-  return NextResponse.json({
+  return apiSuccess({
     activeWorkspaces,
     failedLaunches24h,
     diskUsage

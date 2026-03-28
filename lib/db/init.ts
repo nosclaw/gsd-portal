@@ -86,9 +86,9 @@ export async function ensureSchema(db: LibSQLDatabase) {
   for (const stmt of SCHEMA_SQL) {
     await db.run(sql.raw(stmt));
   }
-  // Run migrations (ignore "duplicate column" errors)
+  // Run migrations — silently ignore errors (expected "duplicate column" or "table already exists" on repeat runs)
   for (const migration of MIGRATIONS) {
-    try { await db.run(sql.raw(migration)); } catch {}
+    try { await db.run(sql.raw(migration)); } catch { /* Expected: migration already applied */ }
   }
   logger.info("Database schema ensured.", { operation: "ensureSchema" });
 }

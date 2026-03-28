@@ -5,8 +5,9 @@ import { getGsdSession } from "@/lib/session-broker";
 import { getWorkspaceUrl } from "@/lib/workspace-url";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
-
-const ADMIN_ROLES = ["ROOT_ADMIN", "TENANT_ADMIN"];
+import { apiError } from "@/lib/api-response";
+import type { PortalUser } from "@/lib/types";
+import { ADMIN_ROLES, WorkspaceStatus } from "@/lib/types";
 
 /**
  * GET /api/admin/workspaces/open?userId=X
@@ -14,18 +15,18 @@ const ADMIN_ROLES = ["ROOT_ADMIN", "TENANT_ADMIN"];
  */
 export const GET = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const actor = req.auth.user as any;
+  const actor = req.auth.user as PortalUser;
   if (!ADMIN_ROLES.includes(actor.role)) {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    return apiError("FORBIDDEN", "Admin access required.", 403);
   }
 
   const url = new URL(req.url);
   const userId = Number(url.searchParams.get("userId"));
   if (!userId) {
-    return NextResponse.json({ error: "userId is required." }, { status: 400 });
+    return apiError("MISSING_FIELDS", "userId is required.", 400);
   }
 
   const db = await getDb();
@@ -35,18 +36,18 @@ export const GET = auth(async (req) => {
   });
 
   if (!targetUser) {
-    return NextResponse.json({ error: "User not found." }, { status: 404 });
+    return apiError("NOT_FOUND", "User not found.", 404);
   }
 
   const instance = await db.query.workspaceInstances.findFirst({
     where: and(
       eq(workspaceInstances.userId, userId),
-      eq(workspaceInstances.status, "RUNNING")
+      eq(workspaceInstances.status, WorkspaceStatus.RUNNING)
     )
   });
 
   if (!instance) {
-    return NextResponse.json({ error: "No running workspace for this user." }, { status: 404 });
+    return apiError("NO_RUNNING_WORKSPACE", "No running workspace for this user.", 404);
   }
 
   let accessToken: string;
@@ -54,7 +55,7 @@ export const GET = auth(async (req) => {
     const session = await getGsdSession(userId);
     accessToken = session.accessToken;
   } catch {
-    return NextResponse.json({ error: "Session expired." }, { status: 401 });
+    return apiError("SESSION_EXPIRED", "Session expired.", 401);
   }
 
   const baseUrl = await getWorkspaceUrl(userId, targetUser.username, instance.port);

@@ -3,23 +3,23 @@ import { getDb } from "@/lib/db";
 import { users, auditLogs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { launchWorkspace } from "@/lib/orchestrator";
-import { NextResponse } from "next/server";
-
-const ADMIN_ROLES = ["ROOT_ADMIN", "TENANT_ADMIN"];
+import { apiError, apiSuccess } from "@/lib/api-response";
+import type { PortalUser } from "@/lib/types";
+import { ADMIN_ROLES } from "@/lib/types";
 
 export const POST = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const admin = req.auth.user as any;
+  const admin = req.auth.user as PortalUser;
   if (!ADMIN_ROLES.includes(admin.role)) {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    return apiError("FORBIDDEN", "Admin access required.", 403);
   }
 
   const { userId } = await req.json();
   if (!userId) {
-    return NextResponse.json({ error: "userId is required." }, { status: 400 });
+    return apiError("MISSING_FIELDS", "userId is required.", 400);
   }
 
   const db = await getDb();
@@ -28,7 +28,7 @@ export const POST = auth(async (req) => {
   });
 
   if (!targetUser) {
-    return NextResponse.json({ error: "User not found." }, { status: 404 });
+    return apiError("NOT_FOUND", "User not found.", 404);
   }
 
   try {
@@ -42,9 +42,9 @@ export const POST = auth(async (req) => {
       metadata: { targetUserId: targetUser.id }
     });
 
-    return NextResponse.json(instance);
+    return apiSuccess(instance);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to launch workspace.";
-    return NextResponse.json({ error: { code: "LAUNCH_FAILED", message } }, { status: 500 });
+    return apiError("LAUNCH_FAILED", message, 500);
   }
 });

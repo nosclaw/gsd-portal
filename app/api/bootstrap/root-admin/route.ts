@@ -1,7 +1,7 @@
 import { getDb } from "@/lib/db";
 import { users, tenants, auditLogs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { apiError, apiSuccess } from "@/lib/api-response";
 
 export async function POST(req: Request) {
   const db = await getDb();
@@ -12,19 +12,13 @@ export async function POST(req: Request) {
   });
 
   if (existingAdmin) {
-    return NextResponse.json(
-      { error: { code: "ALREADY_INITIALIZED", message: "Root admin already exists." } },
-      { status: 409 }
-    );
+    return apiError("ALREADY_INITIALIZED", "Root admin already exists.", 409);
   }
 
   const { username, email, password, name, tenantName } = await req.json();
 
   if (!username || !email || !password || !name) {
-    return NextResponse.json(
-      { error: { code: "MISSING_FIELDS", message: "username, email, password, and name are required." } },
-      { status: 400 }
-    );
+    return apiError("MISSING_FIELDS", "username, email, password, and name are required.", 400);
   }
 
   const bcrypt = await import("bcryptjs");
@@ -64,7 +58,7 @@ export async function POST(req: Request) {
     result: "SUCCESS"
   });
 
-  return NextResponse.json({
+  return apiSuccess({
     success: true,
     user: { id: admin.id, username: admin.username, role: admin.role }
   });

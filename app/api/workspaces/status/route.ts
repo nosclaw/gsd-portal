@@ -4,14 +4,16 @@ import { workspaceInstances, workspaceSessions } from "@/lib/db/schema";
 import { getWorkspaceUrl } from "@/lib/workspace-url";
 import { appEnv } from "@/lib/env";
 import { eq, and, desc } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { apiError, apiSuccess } from "@/lib/api-response";
+import type { PortalUser } from "@/lib/types";
+import { WorkspaceStatus } from "@/lib/types";
 
 export const GET = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const user = req.auth.user as any;
+  const user = req.auth.user as PortalUser;
   const userId = Number(user.id);
   const db = await getDb();
 
@@ -19,7 +21,7 @@ export const GET = auth(async (req) => {
   let instance = await db.query.workspaceInstances.findFirst({
     where: and(
       eq(workspaceInstances.userId, userId),
-      eq(workspaceInstances.status, "RUNNING")
+      eq(workspaceInstances.status, WorkspaceStatus.RUNNING)
     )
   });
 
@@ -35,20 +37,20 @@ export const GET = auth(async (req) => {
     where: eq(workspaceSessions.userId, userId)
   });
 
-  const workspaceUrl = instance?.status === "RUNNING"
+  const workspaceUrl = instance?.status === WorkspaceStatus.RUNNING
     ? await getWorkspaceUrl(userId, user.username, instance.port)
     : null;
 
   let idleTimeoutAt: number | null = null;
-  if (instance?.status === "RUNNING" && instance.lastHeartbeat) {
+  if (instance?.status === WorkspaceStatus.RUNNING && instance.lastHeartbeat) {
     const heartbeatMs = instance.lastHeartbeat instanceof Date
       ? instance.lastHeartbeat.getTime()
       : Number(instance.lastHeartbeat) * 1000;
     idleTimeoutAt = heartbeatMs + appEnv.idleReclaimMinutes * 60 * 1000;
   }
 
-  return NextResponse.json({
-    instance: instance || { status: "STOPPED" },
+  return apiSuccess({
+    instance: instance || { status: WorkspaceStatus.STOPPED },
     session: session ? { expiresAt: session.expiresAt, hasToken: true } : null,
     workspaceUrl,
     idleTimeoutAt

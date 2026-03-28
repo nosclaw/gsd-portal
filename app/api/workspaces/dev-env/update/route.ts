@@ -1,22 +1,20 @@
 import { auth } from "@/auth";
 import { updateDevEnv } from "@/lib/dev-env";
-import { NextResponse } from "next/server";
+import { apiError, apiSuccess } from "@/lib/api-response";
+import type { PortalUser } from "@/lib/types";
 
 export const POST = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const user = req.auth.user as any;
+  const user = req.auth.user as PortalUser;
 
   try {
     const result = await updateDevEnv(Number(user.id), user.username);
-    return NextResponse.json(result);
+    return apiSuccess(result);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to update dev-env.";
-    return NextResponse.json(
-      { error: { code: "DEV_ENV_UPDATE_FAILED", message } },
-      { status: 500 }
-    );
+    return apiError("DEV_ENV_UPDATE_FAILED", message, 500);
   }
 });

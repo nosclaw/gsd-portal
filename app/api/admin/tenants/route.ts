@@ -1,40 +1,39 @@
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { tenants, auditLogs } from "@/lib/db/schema";
-import { NextResponse } from "next/server";
+import { apiError, apiSuccess } from "@/lib/api-response";
+import type { PortalUser } from "@/lib/types";
+import { UserRole } from "@/lib/types";
 
 export const GET = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const user = req.auth.user as any;
-  if (user.role !== "ROOT_ADMIN") {
-    return NextResponse.json({ error: "Root admin access required." }, { status: 403 });
+  const user = req.auth.user as PortalUser;
+  if (user.role !== UserRole.ROOT_ADMIN) {
+    return apiError("FORBIDDEN", "Root admin access required.", 403);
   }
 
   const db = await getDb();
   const allTenants = await db.query.tenants.findMany();
-  return NextResponse.json(allTenants);
+  return apiSuccess(allTenants);
 });
 
 export const POST = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const user = req.auth.user as any;
-  if (user.role !== "ROOT_ADMIN") {
-    return NextResponse.json({ error: "Root admin access required." }, { status: 403 });
+  const user = req.auth.user as PortalUser;
+  if (user.role !== UserRole.ROOT_ADMIN) {
+    return apiError("FORBIDDEN", "Root admin access required.", 403);
   }
 
   const { name, settings } = await req.json();
 
   if (!name) {
-    return NextResponse.json(
-      { error: { code: "MISSING_FIELDS", message: "Tenant name is required." } },
-      { status: 400 }
-    );
+    return apiError("MISSING_FIELDS", "Tenant name is required.", 400);
   }
 
   const db = await getDb();
@@ -56,5 +55,5 @@ export const POST = auth(async (req) => {
     metadata: { tenantName: name }
   });
 
-  return NextResponse.json(tenant, { status: 201 });
+  return apiSuccess(tenant, 201);
 });

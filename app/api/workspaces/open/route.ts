@@ -5,27 +5,27 @@ import { getGsdSession } from "@/lib/session-broker";
 import { getWorkspaceUrl } from "@/lib/workspace-url";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/api-response";
+import type { PortalUser } from "@/lib/types";
+import { WorkspaceStatus } from "@/lib/types";
 
 export const GET = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const user = req.auth.user as any;
+  const user = req.auth.user as PortalUser;
   const db = await getDb();
 
   const instance = await db.query.workspaceInstances.findFirst({
     where: and(
       eq(workspaceInstances.userId, Number(user.id)),
-      eq(workspaceInstances.status, "RUNNING")
+      eq(workspaceInstances.status, WorkspaceStatus.RUNNING)
     )
   });
 
   if (!instance) {
-    return NextResponse.json(
-      { error: { code: "NO_RUNNING_WORKSPACE", message: "No running workspace." } },
-      { status: 404 }
-    );
+    return apiError("NO_RUNNING_WORKSPACE", "No running workspace.", 404);
   }
 
   let accessToken: string;
@@ -33,10 +33,7 @@ export const GET = auth(async (req) => {
     const session = await getGsdSession(Number(user.id));
     accessToken = session.accessToken;
   } catch {
-    return NextResponse.json(
-      { error: { code: "SESSION_EXPIRED", message: "Session expired. Please reconnect." } },
-      { status: 401 }
-    );
+    return apiError("SESSION_EXPIRED", "Session expired. Please reconnect.", 401);
   }
 
   // Redirect to workspace URL with token in hash (hash stays client-side, never sent to server)

@@ -4,18 +4,21 @@ import { users, auditLogs } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { stopWorkspace } from "@/lib/orchestrator";
 import { revokeGsdSession } from "@/lib/session-broker";
-import { NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
+import { apiError, apiSuccess } from "@/lib/api-response";
+import type { PortalUser } from "@/lib/types";
+import { UserRole, UserStatus } from "@/lib/types";
 
 export const POST = auth(async (req) => {
-  if (!req.auth || (req.auth.user as any).role === "MEMBER") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  if (!req.auth || (req.auth.user as PortalUser).role === UserRole.MEMBER) {
+    return apiError("FORBIDDEN", "Admin access required.", 403);
   }
 
   const { userId, action } = await req.json();
-  const actor = req.auth.user as any;
+  const actor = req.auth.user as PortalUser;
   const db = await getDb();
 
-  const status = action === "approve" ? "APPROVED" : action === "reject" ? "REJECTED" : "SUSPENDED";
+  const status = action === "approve" ? UserStatus.APPROVED : action === "reject" ? UserStatus.REJECTED : UserStatus.SUSPENDED;
 
   // Get target user info before update
   const targetUser = await db.query.users.findFirst({
@@ -23,7 +26,7 @@ export const POST = auth(async (req) => {
   });
 
   if (!targetUser) {
-    return NextResponse.json({ error: "User not found." }, { status: 404 });
+    return apiError("NOT_FOUND", "User not found.", 404);
   }
 
   await db
@@ -32,12 +35,12 @@ export const POST = auth(async (req) => {
     .where(and(eq(users.id, userId), eq(users.tenantId, actor.tenantId)));
 
   // When suspending or rejecting, forcibly stop workspace and revoke session
-  if (status === "SUSPENDED" || status === "REJECTED") {
+  if (status === UserStatus.SUSPENDED || status === UserStatus.REJECTED) {
     try {
       await stopWorkspace(userId, targetUser.username);
       await revokeGsdSession(userId);
-    } catch {
-      // Workspace may not be running — that's OK
+    } catch (err) {
+      logger.debug("Workspace may not be running during status change.", { userId, error: String(err) });
     }
   }
 
@@ -48,5 +51,5 @@ export const POST = auth(async (req) => {
     result: "SUCCESS"
   });
 
-  return NextResponse.json({ success: true });
+  return apiSuccess({ success: true });
 });

@@ -1,36 +1,38 @@
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { users, auditLogs } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
+import { apiError, apiSuccess } from "@/lib/api-response";
+import type { PortalUser } from "@/lib/types";
+import { UserRole } from "@/lib/types";
 
-const VALID_ROLES = ["MEMBER", "TENANT_ADMIN"];
+const VALID_ROLES = [UserRole.MEMBER, UserRole.TENANT_ADMIN];
 
 export const POST = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
-  const actor = req.auth.user as any;
+  const actor = req.auth.user as PortalUser;
 
   // Only ROOT_ADMIN can change roles
-  if (actor.role !== "ROOT_ADMIN") {
-    return NextResponse.json({ error: "Only root admin can change user roles." }, { status: 403 });
+  if (actor.role !== UserRole.ROOT_ADMIN) {
+    return apiError("FORBIDDEN", "Only root admin can change user roles.", 403);
   }
 
   const { userId, role } = await req.json();
 
   if (!userId || !role) {
-    return NextResponse.json({ error: "userId and role are required." }, { status: 400 });
+    return apiError("MISSING_FIELDS", "userId and role are required.", 400);
   }
 
   if (!VALID_ROLES.includes(role)) {
-    return NextResponse.json({ error: `Invalid role. Must be one of: ${VALID_ROLES.join(", ")}` }, { status: 400 });
+    return apiError("INVALID_ROLE", `Invalid role. Must be one of: ${VALID_ROLES.join(", ")}`, 400);
   }
 
   // Cannot change own role
   if (Number(actor.id) === Number(userId)) {
-    return NextResponse.json({ error: "Cannot change your own role." }, { status: 400 });
+    return apiError("INVALID_OPERATION", "Cannot change your own role.", 400);
   }
 
   const db = await getDb();
@@ -40,11 +42,11 @@ export const POST = auth(async (req) => {
   });
 
   if (!targetUser) {
-    return NextResponse.json({ error: "User not found." }, { status: 404 });
+    return apiError("NOT_FOUND", "User not found.", 404);
   }
 
-  if (targetUser.role === "ROOT_ADMIN") {
-    return NextResponse.json({ error: "Cannot change root admin's role." }, { status: 403 });
+  if (targetUser.role === UserRole.ROOT_ADMIN) {
+    return apiError("FORBIDDEN", "Cannot change root admin's role.", 403);
   }
 
   await db
@@ -60,5 +62,5 @@ export const POST = auth(async (req) => {
     metadata: { previousRole: targetUser.role, newRole: role }
   });
 
-  return NextResponse.json({ success: true });
+  return apiSuccess({ success: true });
 });
