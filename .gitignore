@@ -1,0 +1,11 @@
+.storage
+.runtime
+node_modules
+.next
+out
+.runtime
+.DS_Store
+coverage
+dist
+*.log
+

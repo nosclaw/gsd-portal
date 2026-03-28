@@ -1,0 +1,65 @@
+@import "tailwindcss";
+@import "@heroui/react/styles";
+
+:root {
+  --font-body: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  --page-background: #f3f6fb;
+  --page-background-accent: rgba(75, 109, 255, 0.14);
+  --page-background-secondary: rgba(255, 123, 166, 0.1);
+  --page-foreground: #0f172a;
+  --surface-border: rgba(255, 255, 255, 0.72);
+  --surface-shadow: 0 24px 80px rgba(15, 23, 42, 0.12);
+  --muted: #5b6478;
+  --hero-grid: rgba(15, 23, 42, 0.06);
+}
+
+.dark {
+  --page-background: #070b11;
+  --page-background-accent: rgba(52, 211, 153, 0.14);
+  --page-background-secondary: rgba(14, 165, 233, 0.12);
+  --page-foreground: #ecf5ff;
+  --surface-border: rgba(255, 255, 255, 0.08);
+  --surface-shadow: 0 28px 100px rgba(0, 0, 0, 0.42);
+  --muted: #8a96ab;
+  --hero-grid: rgba(255, 255, 255, 0.08);
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, var(--page-background-accent), transparent 32%),
+    radial-gradient(circle at top right, var(--page-background-secondary), transparent 28%),
+    var(--page-background);
+  color: var(--page-foreground);
+  font-family: var(--font-body), sans-serif;
+}
+
+::selection {
+  background: rgba(59, 130, 246, 0.24);
+}
+
+@layer utilities {
+  .surface {
+    @apply rounded-[28px] border border-[color:var(--surface-border)] bg-white/78 shadow-[var(--surface-shadow)] backdrop-blur-xl dark:bg-white/5;
+  }
+
+  .surface-soft {
+    @apply rounded-[24px] border border-white/50 bg-white/60 backdrop-blur-xl dark:border-white/8 dark:bg-white/4;
+  }
+
+  .hero-grid {
+    background-image:
+      linear-gradient(to right, var(--hero-grid) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--hero-grid) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .text-muted {
+    color: var(--muted);
+  }
+}

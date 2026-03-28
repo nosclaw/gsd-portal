@@ -1,0 +1,35 @@
+{
+  "name": "gsd-portal",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build --webpack",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@heroui/react": "latest",
+    "@libsql/client": "^0.17.2",
+    "bcryptjs": "^3.0.3",
+    "drizzle-orm": "^0.45.2",
+    "framer-motion": "latest",
+    "lucide-react": "latest",
+    "next": "latest",
+    "next-auth": "^5.0.0-beta.30",
+    "next-themes": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "latest",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "drizzle-kit": "^0.31.10",
+    "tailwindcss": "latest",
+    "typescript": "latest"
+  }
+}

@@ -1,0 +1,200 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  Separator,
+  Spinner
+} from "@heroui/react";
+import { ExternalLink, Play, Power, RotateCw } from "lucide-react";
+
+import { StatusChip } from "@/components/shared/status-chip";
+
+type ActionType = "launch" | "stop" | "restart" | null;
+
+export function WorkspaceOverview() {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeAction, setActiveAction] = useState<ActionType>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/workspaces/status");
+      const json = await res.json();
+      setData(json);
+    } catch {
+      setError("Failed to fetch workspace status.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 5000);
+    return () => clearInterval(interval);
+  }, [fetchStatus]);
+
+  const handleAction = async (action: ActionType) => {
+    if (!action) return;
+    setActiveAction(action);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/workspaces/${action}`, { method: "POST" });
+      const json = await res.json();
+
+      if (!res.ok) {
+        setError(json.error?.message || `Failed to ${action} workspace.`);
+      }
+    } catch {
+      setError(`Network error while trying to ${action} workspace.`);
+    } finally {
+      await fetchStatus();
+      setActiveAction(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Card className="surface flex min-h-[400px] items-center justify-center">
+        <Spinner />
+      </Card>
+    );
+  }
+
+  const { instance, session } = data;
+  const isRunning = instance?.status === "RUNNING";
+  const isStarting = instance?.status === "STARTING";
+
+  return (
+    <Card className="surface">
+      <CardHeader className="flex items-center justify-between p-6">
+        <div className="flex flex-col gap-1">
+          <p className="text-sm text-muted">Active instance</p>
+          <h3 className="text-2xl font-semibold tracking-tight">
+            GSD Workspace
+          </h3>
+        </div>
+        <StatusChip status={instance?.status || "STOPPED"} />
+      </CardHeader>
+      <CardContent className="space-y-6 px-6 pb-6 pt-0">
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl bg-danger-50 p-4 text-sm text-danger dark:bg-danger-900/10">
+            <p>{error}</p>
+          </div>
+        )}
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="space-y-4">
+            <div className="surface-soft p-4">
+              <p className="text-xs uppercase tracking-wider text-muted">
+                Runtime endpoint
+              </p>
+              <div className="mt-1 flex items-center justify-between">
+                <p className="font-mono font-medium">
+                  {isRunning ? `${window.location.hostname}:${instance.port}` : "Not assigned"}
+                </p>
+                {isRunning && (
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant="ghost"
+                    onPress={() => {
+                      window.open("/api/workspaces/open", "_blank");
+                    }}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="surface-soft p-4">
+              <p className="text-xs uppercase tracking-wider text-muted">
+                Session validity
+              </p>
+              <p className="mt-1 font-medium">
+                {session
+                  ? `Expires at ${new Date(session.expiresAt).toLocaleTimeString()}`
+                  : "No active session"}
+              </p>
+            </div>
+
+            <div className="surface-soft p-4">
+              <p className="text-xs uppercase tracking-wider text-muted">
+                Process ID
+              </p>
+              <p className="mt-1 font-mono font-medium">
+                {instance?.pid || "-"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col justify-end gap-3">
+            {!isRunning && !isStarting ? (
+              <Button
+                className="h-12 rounded-full font-semibold"
+                variant="primary"
+                isDisabled={activeAction === "launch"}
+                onPress={() => handleAction("launch")}
+              >
+                {activeAction === "launch" ? "Launching..." : "Launch workspace"}
+                <Play className="h-4 w-4" />
+              </Button>
+            ) : (
+              <>
+                <Button
+                  className="h-12 rounded-full font-semibold"
+                  variant="secondary"
+                  isDisabled={activeAction !== null}
+                  onPress={() => handleAction("restart")}
+                >
+                  {activeAction === "restart" ? "Restarting..." : "Restart workspace"}
+                  <RotateCw className="h-4 w-4" />
+                </Button>
+                <Button
+                  className="h-12 rounded-full font-semibold"
+                  variant="danger-soft"
+                  isDisabled={activeAction !== null}
+                  onPress={() => handleAction("stop")}
+                >
+                  {activeAction === "stop" ? "Stopping..." : "Stop instance"}
+                  <Power className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+
+        <Separator className="opacity-50" />
+
+        <div data-workspace-activity>
+          <p className="text-sm font-medium text-muted">Workspace activity</p>
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted">Status</span>
+              <span className="font-medium">{instance?.status || "STOPPED"}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted">Port</span>
+              <span className="font-mono">{instance?.port || "-"}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted">Last heartbeat</span>
+              <span>
+                {instance?.lastHeartbeat
+                  ? new Date(instance.lastHeartbeat).toLocaleTimeString()
+                  : "Never"}
+              </span>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

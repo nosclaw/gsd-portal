@@ -1,0 +1,43 @@
+services:
+  portal:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      # Portal Web UI
+      - ${PORTAL_PUBLIC_PORT:-29000}:3000
+      # GSD workspace ports
+      - 30000-30999:30000-30999
+      # User dev application ports
+      - 40000-40099:40000-40099
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is required}
+      AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
+      AUTH_URL: ${APP_BASE_URL:-http://localhost:29000}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:29000}
+      RUNTIME_ROOT_DIR: /app/.runtime
+      WORKSPACE_ROOT_DIR: workspaces
+      SQLITE_DB_PATH: data/portal.db
+      LOG_ROOT_DIR: logs
+      IDLE_RECLAIM_MINUTES: ${IDLE_RECLAIM_MINUTES:-60}
+      SESSION_REFRESH_LEEWAY_SECONDS: ${SESSION_REFRESH_LEEWAY_SECONDS:-120}
+    volumes:
+      - .storage/portal_sqlite_data:/app/.runtime/data
+      - .storage/portal_workspaces:/app/.runtime/workspaces
+      - .storage/portal_logs:/app/.runtime/logs
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health/ready').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
