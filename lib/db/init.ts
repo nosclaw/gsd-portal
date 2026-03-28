@@ -37,6 +37,15 @@ const SCHEMA_SQL = [
     refresh_token TEXT NOT NULL,
     expires_at INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS dev_env_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    commit TEXT NOT NULL,
+    repo_url TEXT NOT NULL,
+    branch TEXT NOT NULL,
+    installed_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS audit_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     actor TEXT NOT NULL,
@@ -69,20 +78,62 @@ export async function seedIfEmpty(db: any) {
   const bcrypt = await import("bcryptjs");
 
   await db.run(sql.raw(
-    `INSERT INTO tenants (name, status, settings) VALUES ('Nosclaw Team', 'ACTIVE', '{"allow_registration":true,"idle_timeout_minutes":60}')`
+    `INSERT INTO tenants (name, status, settings) VALUES ('Nosclaw Team', 'ACTIVE', '{"allow_registration":true,"idle_timeout_minutes":60,"dev_env_repo":"https://github.com/nosclaw/dev-env.git","dev_env_branch":"main","dev_env_auto_init":true}')`
   ));
 
   const hashedPassword = await bcrypt.hash("admin123", 10);
+  const memberPassword = await bcrypt.hash("member123", 10);
+  const now = Math.floor(Date.now() / 1000);
 
+  // Root Admin
   await db.run(sql.raw(
     `INSERT INTO users (username, email, password, name, role, status, tenant_id, joined_at)
-     VALUES ('admin', 'admin@nosclaw.com', '${hashedPassword}', 'Root Admin', 'ROOT_ADMIN', 'APPROVED', 1, ${Math.floor(Date.now() / 1000)})`
+     VALUES ('admin', 'admin@nosclaw.com', '${hashedPassword}', 'Root Admin', 'ROOT_ADMIN', 'APPROVED', 1, ${now})`
+  ));
+
+  // Tenant Admin — approved, can manage users
+  await db.run(sql.raw(
+    `INSERT INTO users (username, email, password, name, role, status, tenant_id, joined_at)
+     VALUES ('avery', 'avery@nosclaw.com', '${memberPassword}', 'Avery Palmer', 'TENANT_ADMIN', 'APPROVED', 1, ${now - 86400})`
+  ));
+
+  // Member — approved, can use workspace
+  await db.run(sql.raw(
+    `INSERT INTO users (username, email, password, name, role, status, tenant_id, joined_at)
+     VALUES ('lena', 'lena@nosclaw.com', '${memberPassword}', 'Lena Costa', 'MEMBER', 'APPROVED', 1, ${now - 172800})`
+  ));
+
+  // Member — pending approval
+  await db.run(sql.raw(
+    `INSERT INTO users (username, email, password, name, role, status, tenant_id, joined_at)
+     VALUES ('mila', 'mila@nosclaw.com', '${memberPassword}', 'Mila Sato', 'MEMBER', 'PENDING', 1, ${now - 3600})`
+  ));
+
+  // Member — suspended
+  await db.run(sql.raw(
+    `INSERT INTO users (username, email, password, name, role, status, tenant_id, joined_at)
+     VALUES ('noah', 'noah@nosclaw.com', '${memberPassword}', 'Noah Kim', 'MEMBER', 'SUSPENDED', 1, ${now - 604800})`
   ));
 
   await db.run(sql.raw(
     `INSERT INTO audit_logs (actor, action, resource, result, timestamp)
-     VALUES ('system', 'SYSTEM_INITIALIZED', 'platform', 'SUCCESS', ${Math.floor(Date.now() / 1000)})`
+     VALUES ('system', 'SYSTEM_INITIALIZED', 'platform', 'SUCCESS', ${now})`
   ));
 
-  logger.info("Database seeded with default tenant and root admin.", { operation: "seedIfEmpty" });
+  await db.run(sql.raw(
+    `INSERT INTO audit_logs (actor, action, resource, result, timestamp)
+     VALUES ('admin', 'USER_APPROVED', 'user:avery', 'SUCCESS', ${now - 86400})`
+  ));
+
+  await db.run(sql.raw(
+    `INSERT INTO audit_logs (actor, action, resource, result, timestamp)
+     VALUES ('admin', 'USER_APPROVED', 'user:lena', 'SUCCESS', ${now - 172800})`
+  ));
+
+  await db.run(sql.raw(
+    `INSERT INTO audit_logs (actor, action, resource, result, timestamp)
+     VALUES ('avery', 'USER_SUSPENDED', 'user:noah', 'SUCCESS', ${now - 259200})`
+  ));
+
+  logger.info("Database seeded with default tenant, admin and sample users.", { operation: "seedIfEmpty" });
 }

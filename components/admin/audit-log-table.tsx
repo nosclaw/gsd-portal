@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, Spinner } from "@heroui/react";
+import { Card, CardContent, CardHeader } from "@heroui/react";
 import { StatusChip } from "@/components/shared/status-chip";
 
 export function AuditLogTable() {
@@ -42,8 +42,17 @@ export function AuditLogTable() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center">
-                    <Spinner size="sm" />
+                  <td colSpan={5} className="px-4 py-6">
+                    <div className="space-y-3">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="flex items-center gap-4">
+                          <div className="h-8 w-28 animate-pulse rounded-xl bg-black/4 dark:bg-white/5" />
+                          <div className="h-8 w-16 animate-pulse rounded-xl bg-black/4 dark:bg-white/5" />
+                          <div className="h-8 w-32 animate-pulse rounded-xl bg-black/4 dark:bg-white/5" />
+                          <div className="h-8 flex-1 animate-pulse rounded-xl bg-black/3 dark:bg-white/4" />
+                        </div>
+                      ))}
+                    </div>
                   </td>
                 </tr>
               ) : logs.length === 0 ? (

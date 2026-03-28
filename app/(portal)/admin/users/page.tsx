@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Card, CardContent, Spinner } from "@heroui/react";
+import { Card, CardContent } from "@heroui/react";
 
 import { UserAdminTable } from "@/components/admin/user-admin-table";
+import { CardSkeleton } from "@/components/shared/page-skeleton";
 import { PageHeader } from "@/components/shared/page-header";
 
 export default function AdminUsersPage() {
@@ -76,9 +77,7 @@ export default function AdminUsersPage() {
                 </div>
               </>
             ) : (
-              <div className="flex items-center justify-center py-8">
-                <Spinner size="sm" />
-              </div>
+              <CardSkeleton lines={3} />
             )}
           </CardContent>
         </Card>

@@ -1,59 +1,116 @@
-import { randomBytes } from "node:crypto";
 import { spawn, execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { access, constants } from "node:fs/promises";
-
-const execFileAsync = promisify(execFile);
+import { access, constants, readFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { eq, and, lt } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { workspaceInstances, workspaceSessions, auditLogs } from "@/lib/db/schema";
 import { appEnv } from "@/lib/env";
 import { mkdir } from "node:fs/promises";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
 import { logger } from "@/lib/logger";
 import { encrypt } from "@/lib/crypto";
+import { initDevEnv } from "@/lib/dev-env";
 
-const GSD_BOOT_TIMEOUT_MS = 180_000;
-const GSD_BOOT_POLL_INTERVAL_MS = 500;
+const execFileAsync = promisify(execFile);
 
-/**
- * Wait for GSD web server to become ready by polling /api/boot.
- */
-async function waitForGsdReady(port: number, authToken: string): Promise<void> {
-  const deadline = Date.now() + GSD_BOOT_TIMEOUT_MS;
-  const url = `http://127.0.0.1:${port}/api/boot`;
-
-  while (Date.now() < deadline) {
-    try {
-      const statusCode = await new Promise<number>((resolve, reject) => {
-        const req = httpRequest(url, {
-          method: "GET",
-          timeout: 5_000,
-          headers: { Authorization: `Bearer ${authToken}` }
-        }, (res) => {
-          res.resume();
-          resolve(res.statusCode ?? 0);
-        });
-        req.once("error", reject);
-        req.end();
-      });
-
-      if (statusCode >= 200 && statusCode < 300) {
-        return;
-      }
-    } catch {
-      // Connection refused / timeout — GSD is still booting
-    }
-
-    await new Promise((r) => setTimeout(r, GSD_BOOT_POLL_INTERVAL_MS));
-  }
-
-  throw new Error(`GSD web server on port ${port} did not become ready within ${GSD_BOOT_TIMEOUT_MS / 1000}s`);
-}
+const GSD_LAUNCH_TIMEOUT_MS = 60_000;
 
 const PORT_RANGE_START = 30000;
 const PORT_RANGE_END = 30999;
+
+/**
+ * Launch GSD --web and wait for the "Ready" line in stderr.
+ * Returns the auth token extracted from the output.
+ */
+function spawnGsdWeb(
+  port: number,
+  workspaceDir: string,
+  username: string,
+  email: string | undefined
+): Promise<{ authToken: string; webPid: number | null }> {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn("gsd", [
+      "--web", workspaceDir,
+      "--port", port.toString(),
+      "--host", "0.0.0.0"
+    ], {
+      stdio: ["ignore", "ignore", "pipe"],
+      cwd: workspaceDir,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: username,
+        GIT_AUTHOR_EMAIL: email ?? `${username}@nosclaw.local`,
+        GIT_COMMITTER_NAME: username,
+        GIT_COMMITTER_EMAIL: email ?? `${username}@nosclaw.local`
+      }
+    });
+
+    let stderrOutput = "";
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        reject(new Error(`GSD web server did not become ready within ${GSD_LAUNCH_TIMEOUT_MS / 1000}s. Output: ${stderrOutput.slice(0, 500)}`));
+      }
+    }, GSD_LAUNCH_TIMEOUT_MS);
+
+    child.stderr!.setEncoding("utf8");
+    child.stderr!.on("data", (chunk: string) => {
+      stderrOutput += chunk;
+      logger.debug("GSD: " + chunk.trim(), { operation: "launchWorkspace", port });
+
+      // GSD prints: [gsd] Ready → http://host:port/#token=<hex>
+      const tokenMatch = stderrOutput.match(/#token=([a-f0-9]+)/);
+      if (tokenMatch && !settled) {
+        settled = true;
+        clearTimeout(timeout);
+        resolvePromise({ authToken: tokenMatch[1], webPid: null });
+      }
+    });
+
+    child.on("error", (err) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        reject(err);
+      }
+    });
+
+    child.on("exit", (code) => {
+      // GSD parent exits after spawning the web server — this is normal (code=0)
+      if (code !== 0 && !settled) {
+        settled = true;
+        clearTimeout(timeout);
+        reject(new Error(`GSD exited with code ${code}. Output: ${stderrOutput.slice(0, 500)}`));
+      }
+    });
+  });
+}
+
+/**
+ * Find the web server PID by reading GSD's web-instances.json registry.
+ */
+async function findGsdWebPid(workspaceDir: string): Promise<number | null> {
+  try {
+    // GSD stores web instances in ~/.gsd/web-instances.json
+    const home = process.env.HOME || "/root";
+    const registryPath = join(home, ".gsd", "web-instances.json");
+    const content = await readFile(registryPath, "utf8");
+    const registry = JSON.parse(content);
+    const resolvedCwd = resolve(workspaceDir);
+
+    for (const [key, entry] of Object.entries(registry)) {
+      if (resolve(key) === resolvedCwd && (entry as any).pid) {
+        return (entry as any).pid;
+      }
+    }
+  } catch {
+    // Registry might not exist yet
+  }
+  return null;
+}
 
 export async function launchWorkspace(userId: number, username: string, email?: string) {
   const db = await getDb();
@@ -90,19 +147,11 @@ export async function launchWorkspace(userId: number, username: string, email?: 
   const workspaceDir = resolve(appEnv.workspaceRootDir, username);
   await mkdir(workspaceDir, { recursive: true });
 
-  // 3.5 Execute setup.sh if present
-  const setupScript = resolve(workspaceDir, "nosclaw/dev-env/setup.sh");
+  // 3.5 Initialize dev-env (clone repo + run setup.sh on first launch)
   try {
-    await access(setupScript, constants.X_OK);
-    logger.info("Executing setup.sh.", { userId, operation: "launchWorkspace", script: setupScript });
-    await execFileAsync(setupScript, [], { cwd: workspaceDir, timeout: 120_000 });
-    logger.info("setup.sh completed.", { userId, operation: "launchWorkspace" });
+    await initDevEnv(userId, username, workspaceDir);
   } catch (err: any) {
-    if (err.code === "ENOENT" || err.code === "EACCES") {
-      logger.debug("setup.sh not found or not executable, skipping.", { userId, operation: "launchWorkspace" });
-    } else {
-      logger.warn("setup.sh execution failed.", { userId, operation: "launchWorkspace", error: err.message });
-    }
+    logger.warn("Dev-env initialization failed, continuing without it.", { userId, operation: "launchWorkspace", error: err.message });
   }
 
   // 4. Update status to STARTING
@@ -116,71 +165,25 @@ export async function launchWorkspace(userId: number, username: string, email?: 
     .returning();
 
   try {
-    // 5. Generate auth token for GSD web server
-    const authToken = randomBytes(32).toString("hex");
+    // 5. Spawn GSD web server and wait for ready
+    logger.info("Launching GSD web server.", { userId, operation: "launchWorkspace", port });
+    const { authToken } = await spawnGsdWeb(port, workspaceDir, username, email);
 
-    // 6. Spawn GSD web server
-    const child = spawn("gsd", [
-      "--web",
-      "--port", port.toString(),
-      workspaceDir
-    ], {
-      detached: true,
-      stdio: ["ignore", "ignore", "pipe"],
-      cwd: workspaceDir,
-      env: {
-        ...process.env,
-        GSD_WEB_AUTH_TOKEN: authToken,
-        GSD_WEB_HOST: "0.0.0.0",
-        GSD_WEB_PORT: port.toString(),
-        GSD_WEB_PROJECT_CWD: workspaceDir,
-        GIT_AUTHOR_NAME: username,
-        GIT_AUTHOR_EMAIL: email ?? `${username}@nosclaw.local`,
-        GIT_COMMITTER_NAME: username,
-        GIT_COMMITTER_EMAIL: email ?? `${username}@nosclaw.local`
-      }
-    });
+    // 6. Find the actual web server PID
+    const webPid = await findGsdWebPid(workspaceDir);
+    logger.info("GSD web server ready.", { userId, operation: "launchWorkspace", port, webPid, tokenLength: authToken.length });
 
-    // Capture stderr for diagnostics
-    let stderrOutput = "";
-    if (child.stderr) {
-      child.stderr.setEncoding("utf8");
-      child.stderr.on("data", (chunk: string) => {
-        stderrOutput += chunk;
-        logger.debug("GSD stderr: " + chunk.trim(), { userId, operation: "launchWorkspace", port });
-      });
-    }
-
-    child.on("exit", (code, signal) => {
-      if (code !== null && code !== 0) {
-        logger.error("GSD process exited unexpectedly.", {
-          userId, operation: "launchWorkspace", port, exitCode: code, signal,
-          stderr: stderrOutput.slice(0, 1000)
-        });
-      }
-    });
-
-    child.unref();
-
-    if (!child.pid) {
-      throw new Error("Failed to spawn GSD process.");
-    }
-
-    // 7. Wait for GSD to be ready before marking as RUNNING
-    logger.info("Waiting for GSD web server to become ready.", { userId, operation: "launchWorkspace", port, pid: child.pid });
-    await waitForGsdReady(port, authToken);
-
-    // 8. Update workspace instance with PID and RUNNING status
+    // 7. Update workspace instance with PID and RUNNING status
     await db
       .update(workspaceInstances)
       .set({
-        pid: child.pid,
+        pid: webPid,
         status: "RUNNING",
         lastHeartbeat: new Date()
       })
       .where(eq(workspaceInstances.id, instance.id));
 
-    // 9. Store GSD auth token as encrypted workspace session
+    // 8. Store GSD auth token as encrypted workspace session
     const encryptedToken = encrypt(authToken);
     await db.delete(workspaceSessions).where(eq(workspaceSessions.userId, userId));
     await db.insert(workspaceSessions).values({
@@ -190,17 +193,17 @@ export async function launchWorkspace(userId: number, username: string, email?: 
       expiresAt: new Date(Date.now() + 24 * 3600 * 1000)
     });
 
-    // 10. Log audit
+    // 9. Log audit
     await db.insert(auditLogs).values({
       actor: username,
       action: "WORKSPACE_STARTED",
       resource: `workspace:${username}`,
       result: "SUCCESS",
-      metadata: { port, pid: child.pid }
+      metadata: { port, pid: webPid }
     });
 
-    logger.info("Workspace launched successfully.", { userId, operation: "launchWorkspace", resource: `workspace:${username}`, port, pid: child.pid });
-    return { ...instance, pid: child.pid, status: "RUNNING" };
+    logger.info("Workspace launched successfully.", { userId, operation: "launchWorkspace", resource: `workspace:${username}`, port, pid: webPid });
+    return { ...instance, pid: webPid, status: "RUNNING" };
   } catch (error: any) {
     logger.error("Workspace launch failed.", { userId, operation: "launchWorkspace", resource: `workspace:${username}`, error: error.message });
     await db
@@ -222,14 +225,29 @@ export async function stopWorkspace(userId: number, username: string) {
   });
 
   if (!instance || !instance.pid) {
-    logger.info("No running workspace to stop.", { userId, operation: "stopWorkspace" });
+    // Try GSD's own stop mechanism
+    const workspaceDir = resolve(appEnv.workspaceRootDir, username);
+    try {
+      await execFileAsync("gsd", ["--web", "stop", workspaceDir], { timeout: 10_000 });
+    } catch {
+      // Ignore — might not be running
+    }
+
+    if (instance) {
+      await db
+        .update(workspaceInstances)
+        .set({ status: "STOPPED", pid: null })
+        .where(eq(workspaceInstances.id, instance.id));
+    }
+
+    logger.info("No running workspace PID to stop, used GSD stop.", { userId, operation: "stopWorkspace" });
     return;
   }
 
   try {
     process.kill(instance.pid, "SIGTERM");
-  } catch (e) {
-    // Already gone?
+  } catch {
+    // Already gone
   }
 
   await db

@@ -5,8 +5,7 @@ import {
   Button,
   Card,
   CardContent,
-  CardHeader,
-  Spinner
+  CardHeader
 } from "@heroui/react";
 import { useSession } from "next-auth/react";
 
@@ -85,8 +84,17 @@ export function UserAdminTable() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center">
-                    <Spinner size="sm" />
+                  <td colSpan={5} className="px-4 py-6">
+                    <div className="space-y-3">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="flex items-center gap-4">
+                          <div className="h-8 w-24 animate-pulse rounded-xl bg-black/4 dark:bg-white/5" />
+                          <div className="h-8 w-20 animate-pulse rounded-xl bg-black/4 dark:bg-white/5" />
+                          <div className="h-8 w-16 animate-pulse rounded-xl bg-black/4 dark:bg-white/5" />
+                          <div className="h-8 flex-1 animate-pulse rounded-xl bg-black/3 dark:bg-white/4" />
+                        </div>
+                      ))}
+                    </div>
                   </td>
                 </tr>
               ) : users.length === 0 ? (

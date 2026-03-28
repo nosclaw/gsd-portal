@@ -3,13 +3,9 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Button,
-  Spinner,
-  Table,
-  TableBody,
-  TableCell,
-  TableColumn,
-  TableHeader,
-  TableRow
+  Card,
+  CardContent,
+  CardHeader
 } from "@heroui/react";
 import { Power } from "lucide-react";
 
@@ -70,9 +66,19 @@ export function WorkspaceAdminTable() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[300px] items-center justify-center">
-        <Spinner />
-      </div>
+      <Card className="surface p-6">
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center gap-4">
+              <div className="h-10 w-10 animate-pulse rounded-2xl bg-black/4 dark:bg-white/5" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-3/4 animate-pulse rounded-full bg-black/4 dark:bg-white/5" />
+                <div className="h-3 w-1/2 animate-pulse rounded-full bg-black/3 dark:bg-white/4" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
     );
   }
 
@@ -88,59 +94,71 @@ export function WorkspaceAdminTable() {
   }
 
   return (
-    <Table aria-label="Workspace instances">
-      <TableHeader>
-        <TableColumn isRowHeader>USER</TableColumn>
-        <TableColumn>STATUS</TableColumn>
-        <TableColumn>PORT</TableColumn>
-        <TableColumn>PID</TableColumn>
-        <TableColumn>LAST HEARTBEAT</TableColumn>
-        <TableColumn>ACTIONS</TableColumn>
-      </TableHeader>
-      <TableBody>
-        {workspaces.map((ws) => (
-          <TableRow key={ws.id} id={ws.id.toString()}>
-            <TableCell>
-              <div>
-                <p className="font-medium">{ws.name}</p>
-                <p className="text-xs text-muted">@{ws.username}</p>
-              </div>
-            </TableCell>
-            <TableCell>
-              <StatusChip status={ws.status} />
-            </TableCell>
-            <TableCell>
-              <span className="font-mono text-sm">{ws.port}</span>
-            </TableCell>
-            <TableCell>
-              <span className="font-mono text-sm">{ws.pid ?? "-"}</span>
-            </TableCell>
-            <TableCell>
-              <span className="text-sm">
-                {ws.lastHeartbeat
-                  ? new Date(ws.lastHeartbeat).toLocaleString()
-                  : "-"}
-              </span>
-            </TableCell>
-            <TableCell>
-              {ws.status === "RUNNING" && (
-                <Button
-                  size="sm"
-                  variant="danger-soft"
-                  isDisabled={stoppingId === ws.userId}
-                  onPress={() => handleForceStop(ws.userId, ws.name)}
-                >
-                  <Power className="h-3 w-3" />
-                  {stoppingId === ws.userId ? "Stopping..." : "Force stop"}
-                </Button>
-              )}
-              {ws.status === "ERROR" && ws.error && (
-                <span className="text-xs text-danger">{ws.error}</span>
-              )}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <Card className="surface">
+      <CardHeader className="flex flex-col items-start gap-1 px-6 pt-6">
+        <p className="text-sm text-muted">All instances</p>
+        <h3 className="text-2xl font-semibold tracking-tight">Workspace instances</h3>
+      </CardHeader>
+      <CardContent className="px-3 pb-4 pt-0">
+        <div className="overflow-hidden rounded-[22px] border border-black/6 dark:border-white/8">
+          <table className="w-full border-collapse text-left">
+            <thead className="bg-black/3 dark:bg-white/4">
+              <tr className="text-xs uppercase tracking-[0.2em] text-muted">
+                <th className="px-4 py-4 font-medium">User</th>
+                <th className="px-4 py-4 font-medium">Status</th>
+                <th className="px-4 py-4 font-medium">Port</th>
+                <th className="px-4 py-4 font-medium">PID</th>
+                <th className="px-4 py-4 font-medium">Last heartbeat</th>
+                <th className="px-4 py-4 font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {workspaces.map((ws) => (
+                <tr key={ws.id} className="border-t border-black/6 dark:border-white/8">
+                  <td className="px-4 py-4">
+                    <div>
+                      <p className="font-medium">{ws.name}</p>
+                      <p className="text-xs text-muted">@{ws.username}</p>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    <StatusChip status={ws.status} />
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className="font-mono text-sm">{ws.port}</span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className="font-mono text-sm">{ws.pid ?? "-"}</span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className="text-sm">
+                      {ws.lastHeartbeat
+                        ? new Date(ws.lastHeartbeat).toLocaleString()
+                        : "-"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    {ws.status === "RUNNING" && (
+                      <Button
+                        size="sm"
+                        variant="danger-soft"
+                        isDisabled={stoppingId === ws.userId}
+                        onPress={() => handleForceStop(ws.userId, ws.name)}
+                      >
+                        <Power className="h-3 w-3" />
+                        {stoppingId === ws.userId ? "Stopping..." : "Force stop"}
+                      </Button>
+                    )}
+                    {ws.status === "ERROR" && ws.error && (
+                      <span className="text-xs text-danger">{ws.error}</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

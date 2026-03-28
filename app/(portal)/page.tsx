@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, Spinner } from "@heroui/react";
+import { Card, CardContent } from "@heroui/react";
 
 import { MetricCard } from "@/components/shared/metric-card";
 import { PageHeader } from "@/components/shared/page-header";
+import { PageSkeleton } from "@/components/shared/page-skeleton";
 import { StatusChip } from "@/components/shared/status-chip";
 
 interface DashboardStats {
@@ -34,11 +35,7 @@ export default function DashboardPage() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <Spinner />
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (!stats) {

@@ -8,6 +8,9 @@ export const tenants = sqliteTable("tenants", {
   settings: text("settings", { mode: "json" }).$type<{
     allow_registration?: boolean;
     idle_timeout_minutes?: number;
+    dev_env_repo?: string;       // e.g. "https://github.com/nosclaw/dev-env.git"
+    dev_env_branch?: string;     // e.g. "main"
+    dev_env_auto_init?: boolean; // auto-init on first workspace launch
   }>()
 });
 
@@ -53,7 +56,8 @@ export const tenantsRelations = relations(tenants, ({ many }) => ({
 export const usersRelations = relations(users, ({ one, many }) => ({
   tenant: one(tenants, { fields: [users.tenantId], references: [tenants.id] }),
   workspaceInstances: many(workspaceInstances),
-  workspaceSessions: many(workspaceSessions)
+  workspaceSessions: many(workspaceSessions),
+  devEnvVersions: many(devEnvVersions)
 }));
 
 export const workspaceInstancesRelations = relations(workspaceInstances, ({ one }) => ({
@@ -62,6 +66,22 @@ export const workspaceInstancesRelations = relations(workspaceInstances, ({ one 
 
 export const workspaceSessionsRelations = relations(workspaceSessions, ({ one }) => ({
   user: one(users, { fields: [workspaceSessions.userId], references: [users.id] })
+}));
+
+export const devEnvVersions = sqliteTable("dev_env_versions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  commit: text("commit").notNull(),          // git commit hash
+  repoUrl: text("repo_url").notNull(),       // repo that was cloned
+  branch: text("branch").notNull(),          // branch that was checked out
+  installedAt: integer("installed_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull()
+});
+
+export const devEnvVersionsRelations = relations(devEnvVersions, ({ one }) => ({
+  user: one(users, { fields: [devEnvVersions.userId], references: [users.id] })
 }));
 
 export const auditLogs = sqliteTable("audit_logs", {

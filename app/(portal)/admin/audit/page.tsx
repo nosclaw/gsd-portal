@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Card, CardContent, Spinner } from "@heroui/react";
+import { Card, CardContent } from "@heroui/react";
 
 import { AuditLogTable } from "@/components/admin/audit-log-table";
+import { CardSkeleton } from "@/components/shared/page-skeleton";
 import { PageHeader } from "@/components/shared/page-header";
 
 export default function AuditPage() {
@@ -103,9 +104,7 @@ export default function AuditPage() {
                 </div>
               </>
             ) : (
-              <div className="flex items-center justify-center py-8">
-                <Spinner size="sm" />
-              </div>
+              <CardSkeleton lines={3} />
             )}
           </CardContent>
         </Card>

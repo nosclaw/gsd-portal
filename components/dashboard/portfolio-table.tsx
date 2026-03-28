@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import {
   Card,
   CardContent,
-  CardHeader,
-  Spinner
+  CardHeader
 } from "@heroui/react";
 
+import { CardSkeleton } from "@/components/shared/page-skeleton";
 import { StatusChip } from "@/components/shared/status-chip";
 
 type PortfolioRow = {
@@ -31,8 +31,8 @@ export function PortfolioTable() {
 
   if (loading) {
     return (
-      <Card className="surface flex h-full min-h-[200px] items-center justify-center border-none">
-        <Spinner />
+      <Card className="surface h-full border-none p-6">
+        <CardSkeleton lines={5} />
       </Card>
     );
   }

@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   LogOut,
   PanelLeftDashed,
+  Settings,
   ShieldCheck,
   UsersRound
 } from "lucide-react";
@@ -22,7 +23,8 @@ const items = [
   { href: "/workspace", label: "Workspace", icon: PanelLeftDashed, roles: ["ROOT_ADMIN", "TENANT_ADMIN", "MEMBER"] },
   { href: "/admin/users", label: "Approvals", icon: UsersRound, roles: ["ROOT_ADMIN", "TENANT_ADMIN"] },
   { href: "/admin/workspaces", label: "Workspaces", icon: Blocks, roles: ["ROOT_ADMIN", "TENANT_ADMIN"] },
-  { href: "/admin/audit", label: "Audit", icon: ShieldCheck, roles: ["ROOT_ADMIN", "TENANT_ADMIN"] }
+  { href: "/admin/audit", label: "Audit", icon: ShieldCheck, roles: ["ROOT_ADMIN", "TENANT_ADMIN"] },
+  { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["ROOT_ADMIN", "TENANT_ADMIN"] }
 ];
 
 export function Sidebar() {

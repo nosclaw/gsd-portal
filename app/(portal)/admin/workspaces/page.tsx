@@ -1,7 +1,5 @@
 "use client";
 
-import { Card, CardContent } from "@heroui/react";
-
 import { PageHeader } from "@/components/shared/page-header";
 import { WorkspaceAdminTable } from "@/components/admin/workspace-admin-table";
 
@@ -13,12 +11,7 @@ export default function AdminWorkspacesPage() {
         eyebrow="Administration"
         title="Workspace management"
       />
-
-      <Card className="surface">
-        <CardContent className="p-0">
-          <WorkspaceAdminTable />
-        </CardContent>
-      </Card>
+      <WorkspaceAdminTable />
     </div>
   );
 }

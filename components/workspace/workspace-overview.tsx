@@ -6,11 +6,11 @@ import {
   Card,
   CardContent,
   CardHeader,
-  Separator,
-  Spinner
+  Separator
 } from "@heroui/react";
-import { ExternalLink, Play, Power, RotateCw } from "lucide-react";
+import { ArrowDownToLine, ExternalLink, Play, Power, RotateCw } from "lucide-react";
 
+import { CardSkeleton } from "@/components/shared/page-skeleton";
 import { StatusChip } from "@/components/shared/status-chip";
 
 type ActionType = "launch" | "stop" | "restart" | null;
@@ -20,6 +20,8 @@ export function WorkspaceOverview() {
   const [loading, setLoading] = useState(true);
   const [activeAction, setActiveAction] = useState<ActionType>(null);
   const [error, setError] = useState<string | null>(null);
+  const [devEnv, setDevEnv] = useState<any>(null);
+  const [devEnvUpdating, setDevEnvUpdating] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -33,11 +35,41 @@ export function WorkspaceOverview() {
     }
   }, []);
 
+  const fetchDevEnv = useCallback(async () => {
+    try {
+      const res = await fetch("/api/workspaces/dev-env/status");
+      const json = await res.json();
+      setDevEnv(json);
+    } catch {
+      // Ignore
+    }
+  }, []);
+
   useEffect(() => {
     fetchStatus();
+    fetchDevEnv();
     const interval = setInterval(fetchStatus, 5000);
     return () => clearInterval(interval);
-  }, [fetchStatus]);
+  }, [fetchStatus, fetchDevEnv]);
+
+  const handleDevEnvUpdate = async () => {
+    setDevEnvUpdating(true);
+    try {
+      const res = await fetch("/api/workspaces/dev-env/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error?.message || "Failed to update dev-env.");
+      }
+      await fetchDevEnv();
+    } catch {
+      setError("Network error while updating dev-env.");
+    } finally {
+      setDevEnvUpdating(false);
+    }
+  };
 
   const handleAction = async (action: ActionType) => {
     if (!action) return;
@@ -70,8 +102,8 @@ export function WorkspaceOverview() {
 
   if (loading) {
     return (
-      <Card className="surface flex min-h-[400px] items-center justify-center">
-        <Spinner />
+      <Card className="surface p-6">
+        <CardSkeleton lines={4} />
       </Card>
     );
   }
@@ -181,6 +213,48 @@ export function WorkspaceOverview() {
         </div>
 
         <Separator className="opacity-50" />
+
+        {devEnv?.configured && (
+          <div>
+            <p className="text-sm font-medium text-muted">Dev environment</p>
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted">Repository</span>
+                <span className="max-w-[200px] truncate font-mono text-xs">{devEnv.repo?.replace("https://github.com/", "").replace(".git", "")}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted">Branch</span>
+                <span className="font-mono">{devEnv.branch}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted">Version</span>
+                <span className="font-mono">{devEnv.currentCommit || "Not installed"}</span>
+              </div>
+              {devEnv.updatedAt && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted">Last updated</span>
+                  <span>{new Date(devEnv.updatedAt).toLocaleString()}</span>
+                </div>
+              )}
+              {devEnv.installed && (
+                <div className="mt-3">
+                  <Button
+                    className="w-full rounded-full font-semibold"
+                    size="sm"
+                    variant={devEnv.updateAvailable ? "primary" : "outline"}
+                    isDisabled={devEnvUpdating}
+                    onPress={handleDevEnvUpdate}
+                  >
+                    <ArrowDownToLine className="h-3.5 w-3.5" />
+                    {devEnvUpdating ? "Updating..." : devEnv.updateAvailable ? `Update available (${devEnv.latestCommit})` : "Check & update"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {devEnv?.configured && <Separator className="opacity-50" />}
 
         <div data-workspace-activity>
           <p className="text-sm font-medium text-muted">Workspace activity</p>
