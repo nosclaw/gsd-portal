@@ -22,6 +22,7 @@ export default function AdminSettingsPage() {
   const [portRangeEnd, setPortRangeEnd] = useState("39999");
   const [defaultModel, setDefaultModel] = useState("arcee-ai/trinity-large-preview:free");
   const [defaultThinkingLevel, setDefaultThinkingLevel] = useState("minimal");
+  const [gitPostBuffer, setGitPostBuffer] = useState("5242880000");
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -36,6 +37,7 @@ export default function AdminSettingsPage() {
       setPortRangeEnd(String(data.settings?.port_range_end || 39999));
       setDefaultModel(data.settings?.default_model || "arcee-ai/trinity-large-preview:free");
       setDefaultThinkingLevel(data.settings?.default_thinking_level || "minimal");
+      setGitPostBuffer(String(data.settings?.git_post_buffer || 5242880000));
     } catch {
       // Ignore
     } finally {
@@ -62,7 +64,8 @@ export default function AdminSettingsPage() {
           port_range_start: Number(portRangeStart) || 30000,
           port_range_end: Number(portRangeEnd) || 39999,
           default_model: defaultModel || "arcee-ai/trinity-large-preview:free",
-          default_thinking_level: defaultThinkingLevel || "minimal"
+          default_thinking_level: defaultThinkingLevel || "minimal",
+          git_post_buffer: Number(gitPostBuffer) || 5242880000
         })
       });
       if (res.ok) {
@@ -175,6 +178,23 @@ export default function AdminSettingsPage() {
                       type="number"
                       value={portRangeEnd}
                       onChange={(e) => setPortRangeEnd(e.target.value)}
+                    />
+                  </TextField>
+                </div>
+              </div>
+
+              <div className="mt-4 border-t border-black/6 pt-5 dark:border-white/8">
+                <p className="text-sm font-medium">Git http.postBuffer</p>
+                <p className="mt-1 text-xs text-muted">
+                  Max size for HTTP POST data in git operations (bytes). Default 5GB for large repos.
+                </p>
+                <div className="mt-3 w-48">
+                  <TextField>
+                    <Input
+                      className="surface-soft rounded-xl font-mono text-sm"
+                      type="number"
+                      value={gitPostBuffer}
+                      onChange={(e) => setGitPostBuffer(e.target.value)}
                     />
                   </TextField>
                 </div>

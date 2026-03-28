@@ -16,6 +16,7 @@ export const tenants = sqliteTable("tenants", {
     port_range_end?: number;       // e.g. 39999
     default_model?: string;        // e.g. "arcee-ai/trinity-large-preview:free"
     default_thinking_level?: string; // e.g. "minimal", "off", "medium", "high"
+    git_post_buffer?: number;      // http.postBuffer in bytes, default 5242880000
   }>()
 });
 

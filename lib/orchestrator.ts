@@ -33,7 +33,8 @@ async function getTenantConfig(userId: number) {
     portStart: s.port_range_start || DEFAULT_PORT_START,
     portEnd: s.port_range_end || DEFAULT_PORT_END,
     defaultModel: s.default_model || "anthropic/claude-sonnet-4",
-    defaultThinkingLevel: s.default_thinking_level || "off"
+    defaultThinkingLevel: s.default_thinking_level || "off",
+    gitPostBuffer: s.git_post_buffer || 5242880000
   };
 }
 
@@ -290,6 +291,8 @@ export async function launchWorkspace(userId: number, username: string, email?: 
       `[user]`,
       `\tname = ${gitConfig.authorName}`,
       `\temail = ${gitConfig.authorEmail}`,
+      `[http]`,
+      `\tpostBuffer = ${tenantConfig.gitPostBuffer}`,
       ...(gitConfig.githubPat ? [
         `[url "https://${gitConfig.githubPat}@github.com/"]`,
         `\tinsteadOf = https://github.com/`
