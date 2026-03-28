@@ -1,20 +1,60 @@
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { eq, like, or, sql, asc, desc } from "drizzle-orm";
+import { apiError, apiSuccess } from "@/lib/api-response";
 
 export const GET = auth(async (req) => {
   if (!req.auth || (req.auth.user as any).role === "MEMBER") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    return apiError("FORBIDDEN", "Admin access required.", 403);
   }
 
   const user = req.auth.user as any;
   const db = await getDb();
 
-  const allUsers = await db.query.users.findMany({
-    where: eq(users.tenantId, user.tenantId)
-  });
+  const url = new URL(req.url);
+  const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
+  const perPage = Math.min(200, Math.max(1, Number(url.searchParams.get("perPage")) || 20));
+  const sort = url.searchParams.get("sort") || "id";
+  const dir = url.searchParams.get("dir") === "desc" ? "desc" : "asc";
+  const search = url.searchParams.get("search") || "";
 
-  return NextResponse.json(allUsers);
+  const tenantFilter = eq(users.tenantId, user.tenantId);
+
+  const conditions = search
+    ? [
+        tenantFilter,
+        or(
+          like(users.username, `%${search}%`),
+          like(users.name, `%${search}%`),
+          like(users.email, `%${search}%`)
+        )!
+      ]
+    : [tenantFilter];
+
+  const where = conditions.length === 1 ? conditions[0] : sql`${conditions[0]} AND ${conditions[1]}`;
+
+  const sortColumn = sort === "username" ? users.username
+    : sort === "name" ? users.name
+    : sort === "email" ? users.email
+    : sort === "role" ? users.role
+    : sort === "status" ? users.status
+    : users.id;
+
+  const orderBy = dir === "desc" ? desc(sortColumn) : asc(sortColumn);
+
+  const [totalResult] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(users)
+    .where(where);
+
+  const data = await db
+    .select()
+    .from(users)
+    .where(where)
+    .orderBy(orderBy)
+    .limit(perPage)
+    .offset((page - 1) * perPage);
+
+  return apiSuccess({ data, total: totalResult.count, page, perPage });
 });

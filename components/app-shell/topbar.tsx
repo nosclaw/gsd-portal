@@ -2,13 +2,13 @@
 
 import { useRef, useState } from "react";
 import { Avatar, AvatarFallback, Button, Input, TextField } from "@heroui/react";
-import { Command, Search, Sparkles } from "lucide-react";
+import { Command, Menu, Search, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 
-export function Topbar() {
+export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const router = useRouter();
   const { data: session } = useSession();
   const user = session?.user as any;
@@ -50,15 +50,27 @@ export function Topbar() {
 
   return (
     <div className="surface flex flex-col gap-4 px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
-      <div className="flex flex-col gap-1">
-        <p className="text-xs uppercase tracking-[0.24em] text-muted">Dashboard / v3</p>
-        <div className="flex items-center gap-2">
-          <h2 className="font-[family-name:var(--font-display)] text-xl tracking-tight">
-            Control layer
-          </h2>
-          <span className="rounded-full bg-emerald-500/12 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-500">
-            healthy
-          </span>
+      <div className="flex items-center gap-3">
+        {/* Hamburger for mobile */}
+        <Button
+          isIconOnly
+          className="rounded-full text-muted md:hidden"
+          size="sm"
+          variant="ghost"
+          onPress={onMenuClick}
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+        <div className="flex flex-col gap-1">
+          <p className="text-xs uppercase tracking-[0.24em] text-muted">Dashboard / v3</p>
+          <div className="flex items-center gap-2">
+            <h2 className="font-[family-name:var(--font-display)] text-xl tracking-tight">
+              Control layer
+            </h2>
+            <span className="rounded-full bg-emerald-500/12 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-500">
+              healthy
+            </span>
+          </div>
         </div>
       </div>
 

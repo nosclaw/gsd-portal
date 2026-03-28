@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 
 interface UseTableOptions<T> {
   data: T[];
@@ -15,11 +16,45 @@ export function useTable<T extends Record<string, any>>({
   pageSize = 10,
   searchKeys = []
 }: UseTableOptions<T>) {
-  const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<keyof T | null>(defaultSort?.key ?? null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">(defaultSort?.dir ?? "asc");
-  const [page, setPage] = useState(1);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // Initialize from URL params
+  const urlPage = searchParams.get("page");
+  const urlSort = searchParams.get("sort");
+  const urlDir = searchParams.get("dir");
+  const urlQ = searchParams.get("q");
+
+  const [search, setSearchState] = useState(urlQ ?? "");
+  const [sortKey, setSortKey] = useState<keyof T | null>(
+    (urlSort as keyof T) ?? defaultSort?.key ?? null
+  );
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(
+    (urlDir as "asc" | "desc") ?? defaultSort?.dir ?? "asc"
+  );
+  const [page, setPage] = useState(urlPage ? Number(urlPage) : 1);
   const [perPage, setPerPage] = useState(pageSize);
+
+  // Sync state to URL
+  const syncUrl = useCallback(
+    (params: { page?: number; sort?: keyof T | null; dir?: string; q?: string }) => {
+      const sp = new URLSearchParams(searchParams.toString());
+
+      const p = params.page ?? page;
+      const s = params.sort !== undefined ? params.sort : sortKey;
+      const d = params.dir ?? sortDir;
+      const q = params.q ?? search;
+
+      if (p > 1) sp.set("page", String(p)); else sp.delete("page");
+      if (s) sp.set("sort", String(s)); else sp.delete("sort");
+      if (s && d) sp.set("dir", d); else sp.delete("dir");
+      if (q.trim()) sp.set("q", q.trim()); else sp.delete("q");
+
+      const qs = sp.toString();
+      router.replace(qs ? `?${qs}` : "?", { scroll: false });
+    },
+    [searchParams, router, page, sortKey, sortDir, search]
+  );
 
   // Filter
   const filtered = useMemo(() => {
@@ -53,18 +88,30 @@ export function useTable<T extends Record<string, any>>({
   const paginated = sorted.slice((safePage - 1) * perPage, safePage * perPage);
 
   const toggleSort = (key: keyof T | string) => {
+    let newDir: "asc" | "desc";
+    let newKey: keyof T;
     if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      newDir = sortDir === "asc" ? "desc" : "asc";
+      newKey = key as keyof T;
     } else {
-      setSortKey(key);
-      setSortDir("asc");
+      newKey = key as keyof T;
+      newDir = "asc";
     }
+    setSortKey(newKey);
+    setSortDir(newDir);
     setPage(1);
+    syncUrl({ sort: newKey, dir: newDir, page: 1 });
   };
 
   const handleSearch = (q: string) => {
-    setSearch(q);
+    setSearchState(q);
     setPage(1);
+    syncUrl({ q, page: 1 });
+  };
+
+  const handleSetPage = (p: number) => {
+    setPage(p);
+    syncUrl({ page: p });
   };
 
   return {
@@ -81,9 +128,9 @@ export function useTable<T extends Record<string, any>>({
     toggleSort,
     // Pagination
     page: safePage,
-    setPage,
+    setPage: handleSetPage,
     perPage,
-    setPerPage: (n: number) => { setPerPage(n); setPage(1); },
+    setPerPage: (n: number) => { setPerPage(n); setPage(1); syncUrl({ page: 1 }); },
     totalPages
   };
 }

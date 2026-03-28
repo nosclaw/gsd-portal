@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { logger } from "@/lib/logger";
 
 const SCHEMA_SQL = [
@@ -81,7 +82,7 @@ const MIGRATIONS = [
   )`
 ];
 
-export async function ensureSchema(db: any) {
+export async function ensureSchema(db: LibSQLDatabase) {
   for (const stmt of SCHEMA_SQL) {
     await db.run(sql.raw(stmt));
   }
@@ -92,7 +93,7 @@ export async function ensureSchema(db: any) {
   logger.info("Database schema ensured.", { operation: "ensureSchema" });
 }
 
-export async function seedIfEmpty(db: any) {
+export async function seedIfEmpty(db: LibSQLDatabase) {
   const result = await db.all(sql.raw(`SELECT COUNT(*) as count FROM tenants`));
   const count = result?.[0]?.count ?? result?.rows?.[0]?.count ?? 0;
 

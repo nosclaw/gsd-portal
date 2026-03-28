@@ -11,6 +11,7 @@ import { resolve, join } from "node:path";
 import { logger } from "@/lib/logger";
 import { encrypt, decrypt } from "@/lib/crypto";
 import { initDevEnv } from "@/lib/dev-env";
+import { WorkspaceStatus } from "@/lib/types";
 
 const execFileAsync = promisify(execFile);
 
@@ -28,7 +29,7 @@ async function getTenantConfig(userId: number) {
     where: eq(usersSchema.id, userId),
     with: { tenant: true }
   });
-  const s = (user?.tenant?.settings || {}) as any;
+  const s = user?.tenant?.settings ?? {};
   return {
     portStart: s.port_range_start || DEFAULT_PORT_START,
     portEnd: s.port_range_end || DEFAULT_PORT_END,
@@ -148,8 +149,9 @@ async function findGsdWebPid(workspaceDir: string): Promise<number | null> {
     const resolvedCwd = resolve(workspaceDir);
 
     for (const [key, entry] of Object.entries(registry)) {
-      if (resolve(key) === resolvedCwd && (entry as any).pid) {
-        return (entry as any).pid;
+      const record = entry as Record<string, unknown>;
+      if (resolve(key) === resolvedCwd && record.pid) {
+        return record.pid as number;
       }
     }
   } catch {
@@ -165,7 +167,7 @@ export async function launchWorkspace(userId: number, username: string, email?: 
   const existing = await db.query.workspaceInstances.findFirst({
     where: and(
       eq(workspaceInstances.userId, userId),
-      eq(workspaceInstances.status, "RUNNING")
+      eq(workspaceInstances.status, WorkspaceStatus.RUNNING)
     )
   });
 
@@ -177,7 +179,7 @@ export async function launchWorkspace(userId: number, username: string, email?: 
   // 2. Load tenant config and allocate port
   const tenantConfig = await getTenantConfig(userId);
   const activeInstances = await db.query.workspaceInstances.findMany({
-    where: eq(workspaceInstances.status, "RUNNING")
+    where: eq(workspaceInstances.status, WorkspaceStatus.RUNNING)
   });
   const usedPorts = new Set(activeInstances.map((i: { port: number }) => i.port));
   let port = tenantConfig.portStart;
@@ -199,8 +201,8 @@ export async function launchWorkspace(userId: number, username: string, email?: 
   // Update status: directory prepared
   await db
     .update(workspaceInstances)
-    .set({ status: "PREPARING" })
-    .where(and(eq(workspaceInstances.userId, userId), eq(workspaceInstances.status, "STARTING")));
+    .set({ status: WorkspaceStatus.PREPARING })
+    .where(and(eq(workspaceInstances.userId, userId), eq(workspaceInstances.status, WorkspaceStatus.STARTING)));
 
   // Lock devRoot to user's home — prevents GSD folder picker from escaping
   const { writeFile, copyFile, access: fsAccess } = await import("node:fs/promises");
@@ -263,8 +265,8 @@ export async function launchWorkspace(userId: number, username: string, email?: 
   // Update status: initializing dev-env
   await db
     .update(workspaceInstances)
-    .set({ status: "INITIALIZING" })
-    .where(and(eq(workspaceInstances.userId, userId), eq(workspaceInstances.status, "PREPARING")));
+    .set({ status: WorkspaceStatus.INITIALIZING })
+    .where(and(eq(workspaceInstances.userId, userId), eq(workspaceInstances.status, WorkspaceStatus.PREPARING)));
 
   initDevEnv(userId, username).catch((err) => {
     logger.warn("Dev-env initialization failed.", { userId, operation: "launchWorkspace", error: err.message });
@@ -276,7 +278,7 @@ export async function launchWorkspace(userId: number, username: string, email?: 
     .values({
       userId,
       port,
-      status: "STARTING"
+      status: WorkspaceStatus.STARTING
     })
     .returning();
 
@@ -315,7 +317,7 @@ export async function launchWorkspace(userId: number, username: string, email?: 
     // Update status: spawning GSD
     await db
       .update(workspaceInstances)
-      .set({ status: "SPAWNING" })
+      .set({ status: WorkspaceStatus.SPAWNING })
       .where(eq(workspaceInstances.id, instance.id));
 
     const { authToken } = await spawnGsdWeb(port, workspaceDir, username, gitConfig);
@@ -329,7 +331,7 @@ export async function launchWorkspace(userId: number, username: string, email?: 
       .update(workspaceInstances)
       .set({
         pid: webPid,
-        status: "RUNNING",
+        status: WorkspaceStatus.RUNNING,
         lastHeartbeat: new Date()
       })
       .where(eq(workspaceInstances.id, instance.id));
@@ -354,12 +356,12 @@ export async function launchWorkspace(userId: number, username: string, email?: 
     });
 
     logger.info("Workspace launched successfully.", { userId, operation: "launchWorkspace", resource: `workspace:${username}`, port, pid: webPid });
-    return { ...instance, pid: webPid, status: "RUNNING" };
+    return { ...instance, pid: webPid, status: WorkspaceStatus.RUNNING };
   } catch (error: any) {
     logger.error("Workspace launch failed.", { userId, operation: "launchWorkspace", resource: `workspace:${username}`, error: error.message });
     await db
       .update(workspaceInstances)
-      .set({ status: "ERROR", error: error.message })
+      .set({ status: WorkspaceStatus.ERROR, error: error.message })
       .where(eq(workspaceInstances.id, instance.id));
 
     throw error;
@@ -371,7 +373,7 @@ export async function stopWorkspace(userId: number, username: string) {
   const instance = await db.query.workspaceInstances.findFirst({
     where: and(
       eq(workspaceInstances.userId, userId),
-      eq(workspaceInstances.status, "RUNNING")
+      eq(workspaceInstances.status, WorkspaceStatus.RUNNING)
     )
   });
 
@@ -387,7 +389,7 @@ export async function stopWorkspace(userId: number, username: string) {
     if (instance) {
       await db
         .update(workspaceInstances)
-        .set({ status: "STOPPED", pid: null })
+        .set({ status: WorkspaceStatus.STOPPED, pid: null })
         .where(eq(workspaceInstances.id, instance.id));
     }
 
@@ -403,7 +405,7 @@ export async function stopWorkspace(userId: number, username: string) {
 
   await db
     .update(workspaceInstances)
-    .set({ status: "STOPPED", pid: null })
+    .set({ status: WorkspaceStatus.STOPPED, pid: null })
     .where(eq(workspaceInstances.id, instance.id));
 
   await db.insert(auditLogs).values({
@@ -423,10 +425,10 @@ export async function reclaimIdleWorkspaces() {
       user: true
     },
     where: and(
-      eq(workspaceInstances.status, "RUNNING"),
+      eq(workspaceInstances.status, WorkspaceStatus.RUNNING),
       lt(workspaceInstances.lastHeartbeat, idleThreshold)
     )
-  } as any);
+  }) as Array<{ userId: number; user: { username: string } }>;
 
   for (const instance of idleInstances) {
     await stopWorkspace(instance.userId, instance.user.username);

@@ -2,18 +2,18 @@ import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { tenants, auditLogs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { apiError, apiSuccess } from "@/lib/api-response";
 
 const ADMIN_ROLES = ["ROOT_ADMIN", "TENANT_ADMIN"];
 
 export const GET = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
   const user = req.auth.user as any;
   if (!ADMIN_ROLES.includes(user.role)) {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    return apiError("FORBIDDEN", "Admin access required.", 403);
   }
 
   const db = await getDb();
@@ -22,10 +22,10 @@ export const GET = auth(async (req) => {
   });
 
   if (!tenant) {
-    return NextResponse.json({ error: "Tenant not found." }, { status: 404 });
+    return apiError("NOT_FOUND", "Tenant not found.", 404);
   }
 
-  return NextResponse.json({
+  return apiSuccess({
     tenantName: tenant.name,
     settings: tenant.settings ?? {}
   });
@@ -33,12 +33,12 @@ export const GET = auth(async (req) => {
 
 export const PUT = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Authentication required.", 401);
   }
 
   const user = req.auth.user as any;
   if (!ADMIN_ROLES.includes(user.role)) {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    return apiError("FORBIDDEN", "Admin access required.", 403);
   }
 
   const body = await req.json();
@@ -49,7 +49,7 @@ export const PUT = auth(async (req) => {
   });
 
   if (!tenant) {
-    return NextResponse.json({ error: "Tenant not found." }, { status: 404 });
+    return apiError("NOT_FOUND", "Tenant not found.", 404);
   }
 
   const currentSettings = (tenant.settings ?? {}) as any;
@@ -68,5 +68,5 @@ export const PUT = auth(async (req) => {
     metadata: { updatedKeys: Object.keys(body) }
   });
 
-  return NextResponse.json({ success: true, settings: updatedSettings });
+  return apiSuccess({ success: true, settings: updatedSettings });
 });

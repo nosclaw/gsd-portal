@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 
 import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
+import { UserStatus, SESSION_MAX_AGE_SECONDS } from "@/lib/types";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -23,7 +24,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: eq(users.username, credentials.username as string)
         });
 
-        if (!user || user.status !== "APPROVED") {
+        if (!user || user.status !== UserStatus.APPROVED) {
           return null;
         }
 
@@ -57,7 +58,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: eq(users.id, Number(token.sub))
         });
 
-        if (!user || user.status !== "APPROVED") {
+        if (!user || user.status !== UserStatus.APPROVED) {
           // Return empty token to force sign-out
           return { ...token, expired: true };
         }
@@ -72,23 +73,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async session({ session, token }) {
       // If user was marked expired (suspended/rejected), invalidate session
-      if ((token as any).expired) {
-        return { ...session, user: undefined } as any;
+      if (token.expired) {
+        return { ...session, user: undefined } as typeof session;
       }
 
       if (session.user) {
-        (session.user as any).role = token.role;
-        (session.user as any).email = token.email;
-        (session.user as any).username = token.username;
-        (session.user as any).tenantId = token.tenantId;
-        (session.user as any).id = token.sub;
+        const user = session.user as Record<string, unknown>;
+        user.role = token.role;
+        user.email = token.email;
+        user.username = token.username;
+        user.tenantId = token.tenantId;
+        user.id = token.sub;
       }
       return session;
     }
   },
   session: {
     strategy: "jwt",
-    maxAge: 86400
+    maxAge: SESSION_MAX_AGE_SECONDS
   },
   pages: {
     signIn: "/auth/sign-in"

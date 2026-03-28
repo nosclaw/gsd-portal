@@ -14,7 +14,7 @@ const initializeDb = async () => {
   return db;
 };
 
-let dbInstance: any;
+let dbInstance: Awaited<ReturnType<typeof initializeDb>>;
 
 export const getDb = async () => {
   if (!dbInstance) {
