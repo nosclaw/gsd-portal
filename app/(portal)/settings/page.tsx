@@ -4,13 +4,13 @@ import { useEffect, useState, useCallback } from "react";
 import { Button, Card, CardContent, CardHeader, Input, TextField } from "@heroui/react";
 import { GitBranch, Lock, Save } from "lucide-react";
 
+import { toast } from "sonner";
 import { CardSkeleton } from "@/components/shared/page-skeleton";
 import { PageHeader } from "@/components/shared/page-header";
 
 export default function UserSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   const [gitUsername, setGitUsername] = useState("");
   const [gitEmail, setGitEmail] = useState("");
@@ -33,7 +33,6 @@ export default function UserSettingsPage() {
 
   const handleSave = async () => {
     setSaving(true);
-    setSaved(false);
     try {
       const body: any = { gitUsername, gitEmail };
       if (githubPat) body.githubPat = githubPat;
@@ -43,11 +42,15 @@ export default function UserSettingsPage() {
         body: JSON.stringify(body)
       });
       if (res.ok) {
-        setSaved(true);
+        toast.success("Settings saved. Restart workspace to apply.");
         setGithubPat("");
         if (githubPat) setHasGithubPat(true);
-        setTimeout(() => setSaved(false), 3000);
+      } else {
+        const data = await res.json();
+        toast.error(data.error?.message || "Failed to save settings");
       }
+    } catch {
+      toast.error("Network error while saving settings");
     } finally {
       setSaving(false);
     }
@@ -56,12 +59,20 @@ export default function UserSettingsPage() {
   const handleRemovePat = async () => {
     setSaving(true);
     try {
-      await fetch("/api/user/settings", {
+      const res = await fetch("/api/user/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ githubPat: "" })
       });
-      setHasGithubPat(false);
+      if (res.ok) {
+        toast.success("Access token removed");
+        setHasGithubPat(false);
+      } else {
+        const data = await res.json();
+        toast.error(data.error?.message || "Failed to remove token");
+      }
+    } catch {
+      toast.error("Network error while removing token");
     } finally {
       setSaving(false);
     }
@@ -184,7 +195,6 @@ export default function UserSettingsPage() {
           <Save className="h-4 w-4" />
           {saving ? "Saving..." : "Save settings"}
         </Button>
-        {saved && <span className="text-sm text-success">Settings saved. Restart workspace to apply.</span>}
       </div>
 
       <PasswordCard />
@@ -197,7 +207,6 @@ function PasswordCard() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const passwordsMatch = newPassword === confirmPassword;
   const isValid = currentPassword && newPassword.length >= 6 && passwordsMatch;
@@ -205,7 +214,6 @@ function PasswordCard() {
   const handleChangePassword = async () => {
     if (!isValid) return;
     setSaving(true);
-    setMessage(null);
     try {
       const res = await fetch("/api/user/password", {
         method: "PUT",
@@ -214,15 +222,15 @@ function PasswordCard() {
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: "success", text: "Password changed successfully." });
+        toast.success("Password changed successfully");
         setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
       } else {
-        setMessage({ type: "error", text: data.error || "Failed to change password." });
+        toast.error(data.error || "Failed to change password");
       }
     } catch {
-      setMessage({ type: "error", text: "Network error." });
+      toast.error("Network error while changing password");
     } finally {
       setSaving(false);
     }
@@ -279,12 +287,6 @@ function PasswordCard() {
             <p className="text-xs text-danger">Passwords do not match.</p>
           )}
         </div>
-
-        {message && (
-          <p className={`text-sm ${message.type === "success" ? "text-success" : "text-danger"}`}>
-            {message.text}
-          </p>
-        )}
 
         <Button
           className="rounded-full font-semibold"

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Button, Card, CardContent, CardHeader, Input, TextField } from "@heroui/react";
 import { Save } from "lucide-react";
 
+import { toast } from "sonner";
 import { CardSkeleton } from "@/components/shared/page-skeleton";
 import { PageHeader } from "@/components/shared/page-header";
 
@@ -11,7 +12,6 @@ export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   // Form state
   const [devEnvRepo, setDevEnvRepo] = useState("");
@@ -51,7 +51,6 @@ export default function AdminSettingsPage() {
 
   const handleSave = async () => {
     setSaving(true);
-    setSaved(false);
     try {
       const res = await fetch("/api/admin/settings", {
         method: "PUT",
@@ -69,9 +68,13 @@ export default function AdminSettingsPage() {
         })
       });
       if (res.ok) {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 3000);
+        toast.success("Settings saved");
+      } else {
+        const data = await res.json();
+        toast.error(data.error?.message || "Failed to save settings");
       }
+    } catch {
+      toast.error("Network error while saving settings");
     } finally {
       setSaving(false);
     }
@@ -249,9 +252,6 @@ export default function AdminSettingsPage() {
                   <Save className="h-4 w-4" />
                   {saving ? "Saving..." : "Save settings"}
                 </Button>
-                {saved && (
-                  <span className="text-sm text-success">Settings saved.</span>
-                )}
               </div>
             </>
           )}

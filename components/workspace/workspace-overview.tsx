@@ -8,8 +8,10 @@ import {
   CardHeader,
   Separator
 } from "@heroui/react";
-import { ArrowDownToLine, ExternalLink, Play, Power, RotateCw } from "lucide-react";
+import { ArrowDownToLine, Check, ExternalLink, Play, Power, RotateCw } from "lucide-react";
 
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { CardSkeleton } from "@/components/shared/page-skeleton";
 import { StatusChip } from "@/components/shared/status-chip";
 
@@ -61,11 +63,13 @@ export function WorkspaceOverview() {
       });
       const json = await res.json();
       if (!res.ok) {
-        setError(json.error?.message || "Failed to update dev-env.");
+        toast.error(json.error?.message || "Failed to update dev-env.");
+      } else {
+        toast.success("Dev environment updated");
       }
       await fetchDevEnv();
     } catch {
-      setError("Network error while updating dev-env.");
+      toast.error("Network error while updating dev-env.");
     } finally {
       setDevEnvUpdating(false);
     }
@@ -90,10 +94,12 @@ export function WorkspaceOverview() {
       const json = await res.json();
 
       if (!res.ok) {
-        setError(json.error?.message || `Failed to ${action} workspace.`);
+        toast.error(json.error?.message || `Failed to ${action} workspace.`);
+      } else {
+        toast.success(`Workspace ${action} initiated`);
       }
     } catch {
-      setError(`Network error while trying to ${action} workspace.`);
+      toast.error(`Network error while trying to ${action} workspace.`);
     } finally {
       await fetchStatus();
       setActiveAction(null);
@@ -108,10 +114,24 @@ export function WorkspaceOverview() {
     );
   }
 
-  const { instance, session, workspaceUrl } = data;
+  const { instance, session, workspaceUrl, idleTimeoutAt } = data;
   const isRunning = instance?.status === "RUNNING";
-  const isStarting = instance?.status === "STARTING";
+  const isLaunching = ["STARTING", "PREPARING", "INITIALIZING", "SPAWNING"].includes(instance?.status);
+  const isStarting = isLaunching;
   const displayUrl = workspaceUrl || (isRunning ? `${window.location.hostname}:${instance.port}` : null);
+
+  // Idle timeout warning (< 5 minutes remaining)
+  const idleWarning = isRunning && idleTimeoutAt && (idleTimeoutAt - Date.now() < 5 * 60 * 1000);
+  const minutesLeft = idleTimeoutAt ? Math.max(0, Math.ceil((idleTimeoutAt - Date.now()) / 60000)) : 0;
+
+  // Launch progress steps
+  const LAUNCH_STEPS = [
+    { key: "PREPARING", label: "Preparing directory" },
+    { key: "INITIALIZING", label: "Initializing dev-env" },
+    { key: "SPAWNING", label: "Starting GSD" },
+    { key: "RUNNING", label: "Ready" }
+  ];
+  const currentStepIndex = LAUNCH_STEPS.findIndex((s) => s.key === instance?.status);
 
   return (
     <Card className="surface">
@@ -128,6 +148,38 @@ export function WorkspaceOverview() {
         {error && (
           <div className="flex items-center gap-2 rounded-xl bg-danger-50 p-4 text-sm text-danger dark:bg-danger-900/10">
             <p>{error}</p>
+          </div>
+        )}
+
+        {isRunning && idleWarning && (
+          <div className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800 dark:bg-amber-900/10 dark:text-amber-300">
+            Workspace will be stopped due to inactivity in {minutesLeft} minute{minutesLeft !== 1 ? "s" : ""}.
+          </div>
+        )}
+
+        {isLaunching && currentStepIndex >= 0 && (
+          <div className="space-y-3">
+            {LAUNCH_STEPS.map((step, i) => {
+              const isDone = i < currentStepIndex;
+              const isActive = i === currentStepIndex;
+              return (
+                <div key={step.key} className="flex items-center gap-3 text-sm">
+                  <div className={cn(
+                    "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
+                    isDone ? "bg-emerald-500 text-white" :
+                    isActive ? "bg-sky-500 text-white animate-pulse" :
+                    "bg-black/5 text-muted dark:bg-white/8"
+                  )}>
+                    {isDone ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                  </div>
+                  <span className={cn(
+                    isActive ? "font-medium" : isDone ? "text-muted" : "text-muted/60"
+                  )}>
+                    {step.label}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
 

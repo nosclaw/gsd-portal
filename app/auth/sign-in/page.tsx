@@ -168,9 +168,9 @@ export default function SignInPage() {
                   Don't have an account?{" "}
                   <Link href="/auth/register">Register</Link>
                 </span>
-                <span className="font-medium text-slate-950 dark:text-white">
-                  Session security enabled
-                </span>
+                <Link href="/auth/reset-password" className="text-sm text-muted hover:text-slate-950 dark:hover:text-white">
+                  Forgot password?
+                </Link>
               </div>
             </CardContent>
           </Card>

@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { workspaceInstances, workspaceSessions } from "@/lib/db/schema";
 import { getWorkspaceUrl } from "@/lib/workspace-url";
+import { appEnv } from "@/lib/env";
 import { eq, and, desc } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -38,9 +39,18 @@ export const GET = auth(async (req) => {
     ? await getWorkspaceUrl(userId, user.username, instance.port)
     : null;
 
+  let idleTimeoutAt: number | null = null;
+  if (instance?.status === "RUNNING" && instance.lastHeartbeat) {
+    const heartbeatMs = instance.lastHeartbeat instanceof Date
+      ? instance.lastHeartbeat.getTime()
+      : Number(instance.lastHeartbeat) * 1000;
+    idleTimeoutAt = heartbeatMs + appEnv.idleReclaimMinutes * 60 * 1000;
+  }
+
   return NextResponse.json({
     instance: instance || { status: "STOPPED" },
     session: session ? { expiresAt: session.expiresAt, hasToken: true } : null,
-    workspaceUrl
+    workspaceUrl,
+    idleTimeoutAt
   });
 });

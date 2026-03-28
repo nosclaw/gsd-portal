@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Avatar, AvatarFallback, Button, Chip } from "@heroui/react";
 import {
+  Activity,
   BellDot,
   Blocks,
   LayoutDashboard,
@@ -25,6 +26,7 @@ const items = [
   { href: "/admin/users", label: "Approvals", icon: UsersRound, roles: ["ROOT_ADMIN", "TENANT_ADMIN"] },
   { href: "/admin/workspaces", label: "Workspaces", icon: Blocks, roles: ["ROOT_ADMIN", "TENANT_ADMIN"] },
   { href: "/admin/audit", label: "Audit", icon: ShieldCheck, roles: ["ROOT_ADMIN", "TENANT_ADMIN"] },
+  { href: "/admin/health", label: "Health", icon: Activity, roles: ["ROOT_ADMIN", "TENANT_ADMIN"] },
   { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["ROOT_ADMIN", "TENANT_ADMIN"] },
   { href: "/settings", label: "My profile", icon: User, roles: ["ROOT_ADMIN", "TENANT_ADMIN", "MEMBER"] }
 ];
@@ -34,6 +36,7 @@ export function Sidebar() {
   const { data: session } = useSession();
   const user = session?.user as any;
   const [workspaceStatus, setWorkspaceStatus] = useState<string>("STOPPED");
+  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     const fetchStatus = () => {
@@ -49,10 +52,30 @@ export function Sidebar() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const isAdmin = user?.role === "ROOT_ADMIN" || user?.role === "TENANT_ADMIN";
+    if (!isAdmin) return;
+
+    const fetchPending = () => {
+      fetch("/api/admin/users")
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setPendingCount(data.filter((u: any) => u.status === "PENDING").length);
+          }
+        })
+        .catch(() => {});
+    };
+    fetchPending();
+    const interval = setInterval(fetchPending, 30000);
+    return () => clearInterval(interval);
+  }, [user?.role]);
+
   const filteredItems = items.filter((item) => !item.roles || item.roles.includes(user?.role));
 
-  const statusLabel = workspaceStatus === "RUNNING" ? "Running" : workspaceStatus === "STARTING" ? "Starting" : "Offline";
-  const statusColor = workspaceStatus === "RUNNING" ? "bg-emerald-400/20 text-emerald-100" : "bg-white/18 text-white";
+  const isLaunching = ["STARTING", "PREPARING", "INITIALIZING", "SPAWNING"].includes(workspaceStatus);
+  const statusLabel = workspaceStatus === "RUNNING" ? "Running" : isLaunching ? "Starting" : "Offline";
+  const statusColor = workspaceStatus === "RUNNING" ? "bg-emerald-400/20 text-emerald-100" : isLaunching ? "bg-amber-400/20 text-amber-100" : "bg-white/18 text-white";
 
   return (
     <div className="surface flex h-full flex-col gap-6 p-5">
@@ -99,6 +122,11 @@ export function Sidebar() {
             >
               <Icon className="h-4 w-4" />
               <span>{item.label}</span>
+              {item.label === "Approvals" && pendingCount > 0 && (
+                <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                  {pendingCount}
+                </span>
+              )}
             </Link>
           );
         })}

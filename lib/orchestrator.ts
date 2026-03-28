@@ -196,6 +196,12 @@ export async function launchWorkspace(userId: number, username: string, email?: 
   await mkdir(resolve(workspaceDir, "projects"), { recursive: true });
   await mkdir(resolve(workspaceDir, ".gsd"), { recursive: true });
 
+  // Update status: directory prepared
+  await db
+    .update(workspaceInstances)
+    .set({ status: "PREPARING" })
+    .where(and(eq(workspaceInstances.userId, userId), eq(workspaceInstances.status, "STARTING")));
+
   // Lock devRoot to user's home — prevents GSD folder picker from escaping
   const { writeFile, copyFile, access: fsAccess } = await import("node:fs/promises");
   await writeFile(
@@ -254,6 +260,12 @@ export async function launchWorkspace(userId: number, username: string, email?: 
   // else: user already has valid settings → don't touch
 
   // 3.5 Initialize dev-env in background (don't block workspace launch)
+  // Update status: initializing dev-env
+  await db
+    .update(workspaceInstances)
+    .set({ status: "INITIALIZING" })
+    .where(and(eq(workspaceInstances.userId, userId), eq(workspaceInstances.status, "PREPARING")));
+
   initDevEnv(userId, username).catch((err) => {
     logger.warn("Dev-env initialization failed.", { userId, operation: "launchWorkspace", error: err.message });
   });
@@ -299,6 +311,12 @@ export async function launchWorkspace(userId: number, username: string, email?: 
       ] : [])
     ].join("\n") + "\n";
     await writeFile(resolve(workspaceDir, ".gitconfig"), gitconfigContent, "utf8");
+
+    // Update status: spawning GSD
+    await db
+      .update(workspaceInstances)
+      .set({ status: "SPAWNING" })
+      .where(eq(workspaceInstances.id, instance.id));
 
     const { authToken } = await spawnGsdWeb(port, workspaceDir, username, gitConfig);
 
@@ -413,6 +431,24 @@ export async function reclaimIdleWorkspaces() {
   for (const instance of idleInstances) {
     await stopWorkspace(instance.userId, instance.user.username);
   }
+}
+
+export async function stopAllWorkspaces() {
+  const db = await getDb();
+  const running = await db.query.workspaceInstances.findMany({
+    with: { user: true },
+    where: eq(workspaceInstances.status, "RUNNING")
+  } as any);
+
+  for (const instance of running) {
+    try {
+      await stopWorkspace(instance.userId, instance.user.username);
+    } catch (err: any) {
+      logger.warn("Failed to stop workspace during shutdown.", { userId: instance.userId, error: err.message });
+    }
+  }
+
+  logger.info(`Stopped ${running.length} workspace(s) during shutdown.`);
 }
 
 export async function syncWorkspaceStates() {

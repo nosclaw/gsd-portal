@@ -66,7 +66,8 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   tenant: one(tenants, { fields: [users.tenantId], references: [tenants.id] }),
   workspaceInstances: many(workspaceInstances),
   workspaceSessions: many(workspaceSessions),
-  devEnvVersions: many(devEnvVersions)
+  devEnvVersions: many(devEnvVersions),
+  passwordResetTokens: many(passwordResetTokens)
 }));
 
 export const workspaceInstancesRelations = relations(workspaceInstances, ({ one }) => ({
@@ -91,6 +92,18 @@ export const devEnvVersions = sqliteTable("dev_env_versions", {
 
 export const devEnvVersionsRelations = relations(devEnvVersions, ({ one }) => ({
   user: one(users, { fields: [devEnvVersions.userId], references: [users.id] })
+}));
+
+export const passwordResetTokens = sqliteTable("password_reset_tokens", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull().references(() => users.id),
+  token: text("token").notNull().unique(),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  usedAt: integer("used_at", { mode: "timestamp" })
+});
+
+export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
+  user: one(users, { fields: [passwordResetTokens.userId], references: [users.id] })
 }));
 
 export const auditLogs = sqliteTable("audit_logs", {

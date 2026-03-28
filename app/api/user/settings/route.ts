@@ -4,6 +4,7 @@ import { users } from "@/lib/db/schema";
 import { encrypt, decrypt } from "@/lib/crypto";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { sanitizeUserInput } from "@/lib/sanitize";
 
 export const GET = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
@@ -34,7 +35,8 @@ export const PUT = auth(async (req) => {
   }
 
   const userId = Number((req.auth.user as any).id);
-  const body = await req.json();
+  const raw = await req.json();
+  const body = sanitizeUserInput(raw, ["gitUsername", "gitEmail"]);
   const db = await getDb();
 
   const updates: any = {};

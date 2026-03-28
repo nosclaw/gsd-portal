@@ -49,6 +49,13 @@ const SCHEMA_SQL = [
     installed_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    token TEXT NOT NULL UNIQUE,
+    expires_at INTEGER NOT NULL,
+    used_at INTEGER
+  )`,
   `CREATE TABLE IF NOT EXISTS audit_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     actor TEXT NOT NULL,
@@ -64,7 +71,14 @@ const SCHEMA_SQL = [
 const MIGRATIONS = [
   "ALTER TABLE users ADD COLUMN git_username TEXT",
   "ALTER TABLE users ADD COLUMN git_email TEXT",
-  "ALTER TABLE users ADD COLUMN github_pat TEXT"
+  "ALTER TABLE users ADD COLUMN github_pat TEXT",
+  `CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    token TEXT NOT NULL UNIQUE,
+    expires_at INTEGER NOT NULL,
+    used_at INTEGER
+  )`
 ];
 
 export async function ensureSchema(db: any) {

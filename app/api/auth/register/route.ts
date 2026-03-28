@@ -3,6 +3,8 @@ import { users, tenants, auditLogs } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { sanitizeUserInput } from "@/lib/sanitize";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_REGEX = /^[a-z0-9_-]{3,32}$/;
@@ -10,7 +12,18 @@ const MIN_PASSWORD_LENGTH = 8;
 
 export async function POST(req: Request) {
   try {
-    const { username, name, email, password } = await req.json();
+    const ip = getClientIp(req);
+    const { success, resetAt } = rateLimit(`register:${ip}`, 5, 15 * 60 * 1000);
+    if (!success) {
+      return NextResponse.json(
+        { error: { code: "RATE_LIMITED", message: "Too many registration attempts. Please try again later." } },
+        { status: 429, headers: { "Retry-After": String(Math.ceil((resetAt - Date.now()) / 1000)) } }
+      );
+    }
+
+    const raw = await req.json();
+    const { password } = raw;
+    const { username, name, email } = sanitizeUserInput(raw, ["username", "name", "email"]);
 
     if (!username || !name || !email || !password) {
       return NextResponse.json(

@@ -1,21 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader } from "@heroui/react";
+import { useEffect, useState, useCallback } from "react";
+import { Button, Card, CardContent, CardHeader } from "@heroui/react";
+import { Download } from "lucide-react";
 import { StatusChip } from "@/components/shared/status-chip";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/shared/table-controls";
 import { useTable } from "@/lib/use-table";
+import { exportToCsv } from "@/lib/csv-export";
 
 export function AuditLogTable() {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
-  useEffect(() => {
-    fetch("/api/admin/audit")
+  const fetchLogs = useCallback(() => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (dateFrom) params.set("from", dateFrom);
+    if (dateTo) params.set("to", dateTo);
+    const qs = params.toString();
+    fetch(`/api/admin/audit${qs ? `?${qs}` : ""}`)
       .then((res) => res.json())
       .then((data) => { if (Array.isArray(data)) setLogs(data); })
       .finally(() => setLoading(false));
-  }, []);
+  }, [dateFrom, dateTo]);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
 
   const table = useTable({
     data: logs,
@@ -26,16 +39,68 @@ export function AuditLogTable() {
 
   return (
     <Card className="surface">
-      <CardHeader className="flex flex-col gap-4 px-6 pt-6 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm text-muted">Audit trail</p>
-          <h3 className="text-2xl font-semibold tracking-tight">Security & ops events</h3>
+      <CardHeader className="flex flex-col gap-4 px-6 pt-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm text-muted">Audit trail</p>
+            <h3 className="text-2xl font-semibold tracking-tight">Security & ops events</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <TableSearch
+              value={table.search}
+              onChange={table.setSearch}
+              placeholder="Search logs..."
+            />
+            <Button
+              isIconOnly
+              className="rounded-full"
+              size="sm"
+              variant="ghost"
+              aria-label="Export CSV"
+              onPress={() =>
+                exportToCsv(
+                  logs,
+                  [
+                    { key: "action", label: "Action" },
+                    { key: "actor", label: "Actor" },
+                    { key: "resource", label: "Resource" },
+                    { key: "result", label: "Result" },
+                    { key: "timestamp", label: "Timestamp" }
+                  ],
+                  "audit-logs.csv"
+                )
+              }
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-        <TableSearch
-          value={table.search}
-          onChange={table.setSearch}
-          placeholder="Search logs..."
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-xs text-muted">From</label>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="rounded-xl border border-black/10 bg-transparent px-3 py-1.5 text-sm dark:border-white/10"
+          />
+          <label className="text-xs text-muted">To</label>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="rounded-xl border border-black/10 bg-transparent px-3 py-1.5 text-sm dark:border-white/10"
+          />
+          {(dateFrom || dateTo) && (
+            <Button
+              className="rounded-full"
+              size="sm"
+              variant="ghost"
+              onPress={() => { setDateFrom(""); setDateTo(""); }}
+            >
+              Clear
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-3 px-3 pb-4 pt-0">
         <div className="overflow-hidden rounded-[22px] border border-black/6 dark:border-white/8">
