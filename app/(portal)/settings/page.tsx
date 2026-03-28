@@ -24,7 +24,7 @@ export default function UserSettingsPage() {
       setGitUsername(data.gitUsername || "");
       setGitEmail(data.gitEmail || "");
       setHasGithubPat(data.hasGithubPat || false);
-    } catch {} finally {
+    } catch (err) { console.warn("Failed to fetch user settings:", err); } finally {
       setLoading(false);
     }
   }, []);
