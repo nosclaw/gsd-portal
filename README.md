@@ -1,84 +1,156 @@
 # GSD Portal
 
-HeroUI-powered Next.js portal for tenant approvals, workspace orchestration and GSD session continuity.
+Multi-tenant workspace management platform for [GSD](https://github.com/nosclaw/gsd). Provides user authentication, workspace orchestration, dev environment initialization, and a unified domain-based access layer.
 
-## Local development
+## Architecture
+
+```
+Browser → Cloudflare Tunnel → Portal (:29000) → GSD Workspace (:30000+)
+                                  ↓
+                            ws-proxy (:29001) → token-based routing
+```
+
+- **Portal** — Next.js 16 + HeroUI, handles auth, user management, workspace lifecycle
+- **ws-proxy** — Lightweight Node.js reverse proxy, routes to GSD instances by auth token
+- **GSD Workspaces** — Per-user GSD web instances, isolated home directories at `/home/{username}`
+
+## Quick Start
 
 ```bash
+# 1. Clone and install
+git clone https://github.com/nosclaw/gsd-portal.git
+cd gsd-portal
 bun install
-bun run dev
-```
 
-The app runs on `http://localhost:3000` by default.
-
-## Build
-
-```bash
-bun run build
-bun run start
-```
-
-## Docker Compose
-
-```bash
+# 2. Configure environment
 cd deploy
-cp .env.example .env.local
-docker compose --env-file .env.local -f compose.base.yml -f compose.local.yml up --build
-docker compose --env-file .env.local -f compose.base.yml -f compose.local.yml down
+cp ../.env.example .env
+# Edit .env — set AUTH_SECRET, APP_BASE_URL, WORKSPACE_DOMAIN
+
+# 3. Start
+docker compose up --build -d
+
+# 4. Open
+open http://localhost:29000
 ```
 
-The reverse-proxied portal is exposed on `http://localhost:29000`.
+## Environment Variables
 
-## Document map
+| Variable | Description | Default |
+|---|---|---|
+| `AUTH_SECRET` | Session encryption key (required) | — |
+| `APP_BASE_URL` | Portal URL | `http://localhost:29000` |
+| `WORKSPACE_DOMAIN` | GSD workspace domain | — |
+| `WORKSPACE_ROOT_DIR` | User home directories | `/home` |
+| `DEV_ENV_DIR` | Shared dev-env repo path | `/opt/dev-env` |
+| `IDLE_RECLAIM_MINUTES` | Auto-stop idle workspaces after | `60` |
 
-- [PRD](./PRD.md)
-- [Docs index](./docs/README.md)
+## Seed Accounts
 
+First boot auto-creates these accounts:
 
+| Username | Password | Role | Status |
+|---|---|---|---|
+| `admin` | `admin123` | ROOT_ADMIN | APPROVED |
+| `avery` | `member123` | TENANT_ADMIN | APPROVED |
+| `lena` | `member123` | MEMBER | APPROVED |
+| `mila` | `member123` | MEMBER | PENDING |
+| `noah` | `member123` | MEMBER | SUSPENDED |
 
-## 账户 有，seed 脚本创建了以下测试账户：
+Login with `admin` / `admin123`, then approve other users from the Approvals page.
 
-  ┌────────────┬────────┬───────────┬──────────────────────────────────┐
-  │    角色    │ 用户名 │   密码    │               状态               │
-  ├────────────┼────────┼───────────┼──────────────────────────────────┤
-  │ Root Admin │ admin  │ admin123  │ APPROVED (可直接登录)            │
-  ├────────────┼────────┼───────────┼──────────────────────────────────┤
-  │ Member     │ member │ member123 │ PENDING (需管理员审批后才能登录) │
-  └────────────┴────────┴───────────┴──────────────────────────────────┘
+## Features
 
-  先用 admin / admin123 登录，然后可以在 Approvals 页面审批 member 账户。
+### User Management
+- Registration with admin approval flow
+- Role hierarchy: ROOT_ADMIN > TENANT_ADMIN > MEMBER
+- Promote/demote users, suspend, delete (with workspace cleanup)
+- Confirm modal with typed username for destructive actions
 
+### Workspace Orchestration
+- One-click launch/stop/restart per user
+- Admin can start/stop any user's workspace
+- Auto-relaunch on browser refresh (GSD daemon mode)
+- Port range configurable via admin settings (default 30000–39999)
+- Workspace directory jailbreak protection
 
-  const hashedPassword = await bcrypt.hash("admin123", 10);
-  const memberPassword = await bcrypt.hash("member123", 10);
-  const now = Math.floor(Date.now() / 1000);
+### Dev Environment
+- Shared `nosclaw/dev-env` repo: first user clones, others pull
+- `setup.sh` runs per-user with isolated HOME
+- Background initialization — doesn't block workspace launch
+- Version tracking and one-click update from UI
 
-  // Root Admin
-  await db.run(sql.raw(
-    `INSERT INTO users (username, email, password, name, role, status, tenant_id, joined_at)
-     VALUES ('admin', 'admin@nosclaw.com', '${hashedPassword}', 'Root Admin', 'ROOT_ADMIN', 'APPROVED', 1, ${now})`
-  ));
+### GSD Integration
+- Auto-skip onboarding with shared API key config
+- Config priority: User's own > Admin shared > System default
+- Default model and thinking level configurable in admin settings
+- `.gitconfig` auto-generated per user (Git identity + GitHub PAT)
+- `GSD_WEB_DAEMON_MODE` prevents shutdown on browser disconnect
+- `SHELL=/bin/bash` for terminal compatibility
 
-  // Tenant Admin — approved, can manage users
-  await db.run(sql.raw(
-    `INSERT INTO users (username, email, password, name, role, status, tenant_id, joined_at)
-     VALUES ('avery', 'avery@nosclaw.com', '${memberPassword}', 'Avery Palmer', 'TENANT_ADMIN', 'APPROVED', 1, ${now - 86400})`
-  ));
+### Domain & Access
+- Single workspace domain with token-based user routing
+- ws-proxy handles old→new token translation on workspace restart
+- Cloudflare Tunnel compatible (two hostnames, one port)
+- Path-based fallback: `localhost:29000/w/{username}/`
 
-  // Member — approved, can use workspace
-  await db.run(sql.raw(
-    `INSERT INTO users (username, email, password, name, role, status, tenant_id, joined_at)
-     VALUES ('lena', 'lena@nosclaw.com', '${memberPassword}', 'Lena Costa', 'MEMBER', 'APPROVED', 1, ${now - 172800})`
-  ));
+### Security
+- Encrypted token storage (AES-256-GCM)
+- Session-time user status re-validation (suspended users auto-logout)
+- Suspend action stops workspace + revokes session
+- Bootstrap endpoint locked after first ROOT_ADMIN creation
 
-  // Member — pending approval
-  await db.run(sql.raw(
-    `INSERT INTO users (username, email, password, name, role, status, tenant_id, joined_at)
-     VALUES ('mila', 'mila@nosclaw.com', '${memberPassword}', 'Mila Sato', 'MEMBER', 'PENDING', 1, ${now - 3600})`
-  ));
+## Docker Build
 
-  // Member — suspended
-  await db.run(sql.raw(
-    `INSERT INTO users (username, email, password, name, role, status, tenant_id, joined_at)
-     VALUES ('noah', 'noah@nosclaw.com', '${memberPassword}', 'Noah Kim', 'MEMBER', 'SUSPENDED', 1, ${now - 604800})`
-  ));
+4-stage optimized Dockerfile:
+
+```
+Stage 1 (deps)         — bun install (cached unless package.json changes)
+Stage 2 (builder)      — next build (~40s, parallel with Stage 3)
+Stage 3 (runtime-base) — apt-get + GSD CLI (cached, parallel with Stage 2)
+Stage 4 (runner)       — COPY only (seconds)
+```
+
+```bash
+# Rebuild after code changes (cached layers, ~45s)
+docker compose up --build -d
+
+# Full rebuild (no cache, ~2min)
+docker compose build --no-cache
+```
+
+## Project Structure
+
+```
+app/
+  (portal)/           — Portal pages (dashboard, workspace, admin, settings)
+  api/                — API routes (auth, workspaces, admin, user settings)
+  auth/               — Login & registration pages
+  w/[...path]/        — Path-based workspace proxy (fallback)
+components/
+  admin/              — User table, workspace table, audit log
+  workspace/          — Workspace overview
+  shared/             — Confirm modal, status chip, page skeleton
+  app-shell/          — Sidebar, topbar
+lib/
+  orchestrator.ts     — Workspace lifecycle (launch, stop, GSD spawn)
+  session-broker.ts   — GSD token management
+  dev-env.ts          — Dev environment clone/init/update
+  crypto.ts           — AES-256-GCM encrypt/decrypt
+  workspace-url.ts    — URL generation (domain or path-based)
+  scheduler.ts        — Background heartbeat, idle reclaim, token refresh
+  env.ts              — Environment config + workspace jailbreak protection
+deploy/
+  compose.yml         — Docker Compose configuration
+  ws-proxy.js         — Workspace reverse proxy
+  scripts/            — GSD install script (auto-detect prebuild vs compile)
+docs/
+  system-design.md    — Architecture and module design
+  PRD.md              — Product requirements
+```
+
+## Documentation
+
+- [Product Requirements (PRD)](./docs/PRD.md)
+- [System Design](./docs/system-design.md)
+- [Deployment Design](./docs/deployment-design.md)
