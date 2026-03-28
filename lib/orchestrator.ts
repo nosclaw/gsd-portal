@@ -212,6 +212,55 @@ export async function launchWorkspace(userId: number, username: string, email?: 
     "utf8"
   );
 
+  // ── Fix skill symlinks if broken (e.g. after HOME path migration) ──
+  const { lstat, symlink, unlink } = await import("node:fs/promises");
+  const skillsSource = resolve(workspaceDir, ".config", "skillshare", "skills");
+  const symlinkTargets = [
+    resolve(workspaceDir, ".claude", "skills"),
+    resolve(workspaceDir, ".agents", "skills")
+  ];
+  for (const linkPath of symlinkTargets) {
+    try {
+      await mkdir(resolve(linkPath, ".."), { recursive: true });
+      const stat = await lstat(linkPath).catch(() => null);
+      if (stat?.isSymbolicLink()) {
+        const target = await readFile(linkPath, "utf8").catch(() => "");
+        // Check if symlink points to wrong path
+        const { readlink } = await import("node:fs/promises");
+        const currentTarget = await readlink(linkPath);
+        if (currentTarget !== skillsSource) {
+          await unlink(linkPath);
+          await symlink(skillsSource, linkPath);
+          logger.info("Fixed broken skills symlink.", { linkPath, from: currentTarget, to: skillsSource });
+        }
+      } else if (!stat) {
+        // Create missing symlink
+        try {
+          await fsAccess(skillsSource);
+          await symlink(skillsSource, linkPath);
+        } catch {
+          // Skills source not installed yet — dev-env init will handle it
+        }
+      }
+    } catch (err) {
+      logger.debug("Skills symlink check skipped.", { linkPath, error: String(err) });
+    }
+  }
+
+  // ── Fix skillshare config paths if they reference an old HOME ──
+  const skillshareConfig = resolve(workspaceDir, ".config", "skillshare", "config.yaml");
+  try {
+    let yaml = await readFile(skillshareConfig, "utf8");
+    const oldPathPattern = /\/app\/\.runtime\/workspaces\/[a-zA-Z0-9_-]+/g;
+    if (oldPathPattern.test(yaml)) {
+      yaml = yaml.replace(oldPathPattern, workspaceDir);
+      await writeFile(skillshareConfig, yaml, "utf8");
+      logger.info("Fixed stale paths in skillshare config.", { userId });
+    }
+  } catch {
+    // Config doesn't exist yet — dev-env init will create it
+  }
+
   // ── GSD agent config initialization ──
   // Priority: User's existing config > Admin shared config > System defaults
   //
