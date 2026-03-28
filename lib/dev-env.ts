@@ -243,7 +243,7 @@ async function runSetupScript(devEnvDir: string, workspaceDir: string, userId: n
       timeout: SETUP_TIMEOUT_MS,
       env: {
         ...process.env,
-        HOME: process.env.HOME || "/root",
+        HOME: workspaceDir,
         USER: username
       }
     });

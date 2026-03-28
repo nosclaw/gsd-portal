@@ -17,6 +17,7 @@ export default function AdminSettingsPage() {
   const [devEnvRepo, setDevEnvRepo] = useState("");
   const [devEnvBranch, setDevEnvBranch] = useState("main");
   const [devEnvAutoInit, setDevEnvAutoInit] = useState(true);
+  const [workspaceDomain, setWorkspaceDomain] = useState("");
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -26,6 +27,7 @@ export default function AdminSettingsPage() {
       setDevEnvRepo(data.settings?.dev_env_repo || "");
       setDevEnvBranch(data.settings?.dev_env_branch || "main");
       setDevEnvAutoInit(data.settings?.dev_env_auto_init !== false);
+      setWorkspaceDomain(data.settings?.workspace_domain || "");
     } catch {
       // Ignore
     } finally {
@@ -47,7 +49,8 @@ export default function AdminSettingsPage() {
         body: JSON.stringify({
           dev_env_repo: devEnvRepo || undefined,
           dev_env_branch: devEnvBranch || "main",
-          dev_env_auto_init: devEnvAutoInit
+          dev_env_auto_init: devEnvAutoInit,
+          workspace_domain: workspaceDomain || undefined
         })
       });
       if (res.ok) {
@@ -118,6 +121,23 @@ export default function AdminSettingsPage() {
                 <label htmlFor="auto-init" className="text-sm">
                   Auto-initialize on first workspace launch
                 </label>
+              </div>
+
+              <div className="mt-4 border-t border-black/6 pt-5 dark:border-white/8">
+                <p className="text-sm font-medium">Workspace domain</p>
+                <p className="mt-1 text-xs text-muted">
+                  Set a base domain for workspace URLs. Each user gets <code className="rounded bg-black/5 px-1 dark:bg-white/8">{"{username}"}-{workspaceDomain || "domain"}</code>
+                </p>
+                <div className="mt-3">
+                  <TextField>
+                    <Input
+                      className="surface-soft rounded-xl"
+                      placeholder="gsd.example.com"
+                      value={workspaceDomain}
+                      onChange={(e) => setWorkspaceDomain(e.target.value)}
+                    />
+                  </TextField>
+                </div>
               </div>
 
               <div className="flex items-center gap-3 pt-2">

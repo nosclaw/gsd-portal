@@ -11,7 +11,8 @@ export const appEnv = {
   idleReclaimMinutes: Number(process.env.IDLE_RECLAIM_MINUTES ?? "60"),
   sessionRefreshLeewaySeconds: Number(
     process.env.SESSION_REFRESH_LEEWAY_SECONDS ?? "120"
-  )
+  ),
+  workspaceDomain: process.env.WORKSPACE_DOMAIN ?? ""  // e.g. "gsd.example.com"
 };
 
 export async function ensureRuntimePaths() {

@@ -1,7 +1,8 @@
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { workspaceInstances, workspaceSessions } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { getWorkspaceUrl } from "@/lib/workspace-url";
+import { eq, and, desc } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export const GET = auth(async (req) => {
@@ -10,18 +11,37 @@ export const GET = auth(async (req) => {
   }
 
   const user = req.auth.user as any;
+  const userId = Number(user.id);
   const db = await getDb();
 
-  const instance = await db.query.workspaceInstances.findFirst({
-    where: eq(workspaceInstances.userId, Number(user.id))
+  // First try to find a RUNNING instance
+  let instance = await db.query.workspaceInstances.findFirst({
+    where: and(
+      eq(workspaceInstances.userId, userId),
+      eq(workspaceInstances.status, "RUNNING")
+    )
   });
 
+  // If no RUNNING, get the most recent record
+  if (!instance) {
+    instance = await db.query.workspaceInstances.findFirst({
+      where: eq(workspaceInstances.userId, userId),
+      orderBy: desc(workspaceInstances.id)
+    });
+  }
+
   const session = await db.query.workspaceSessions.findFirst({
-    where: eq(workspaceSessions.userId, Number(user.id))
+    where: eq(workspaceSessions.userId, userId)
   });
+
+  let workspaceUrl: string | null = null;
+  if (instance?.status === "RUNNING") {
+    workspaceUrl = await getWorkspaceUrl(userId, user.username, instance.port);
+  }
 
   return NextResponse.json({
     instance: instance || { status: "STOPPED" },
-    session: session ? { expiresAt: session.expiresAt, hasToken: true } : null
+    session: session ? { expiresAt: session.expiresAt, hasToken: true } : null,
+    workspaceUrl
   });
 });

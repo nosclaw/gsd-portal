@@ -8,9 +8,10 @@ export const tenants = sqliteTable("tenants", {
   settings: text("settings", { mode: "json" }).$type<{
     allow_registration?: boolean;
     idle_timeout_minutes?: number;
-    dev_env_repo?: string;       // e.g. "https://github.com/nosclaw/dev-env.git"
-    dev_env_branch?: string;     // e.g. "main"
-    dev_env_auto_init?: boolean; // auto-init on first workspace launch
+    dev_env_repo?: string;         // e.g. "https://github.com/nosclaw/dev-env.git"
+    dev_env_branch?: string;       // e.g. "main"
+    dev_env_auto_init?: boolean;   // auto-init on first workspace launch
+    workspace_domain?: string;     // e.g. "gsd.example.com" → {username}.gsd.example.com
   }>()
 });
 
@@ -73,7 +74,7 @@ export const devEnvVersions = sqliteTable("dev_env_versions", {
   userId: integer("user_id")
     .notNull()
     .references(() => users.id),
-  commit: text("commit").notNull(),          // git commit hash
+  commit: text("commit_hash").notNull(),      // git commit hash
   repoUrl: text("repo_url").notNull(),       // repo that was cloned
   branch: text("branch").notNull(),          // branch that was checked out
   installedAt: integer("installed_at", { mode: "timestamp" }).notNull(),

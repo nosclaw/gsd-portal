@@ -2,14 +2,10 @@ import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { workspaceInstances } from "@/lib/db/schema";
 import { getGsdSession } from "@/lib/session-broker";
+import { getWorkspaceUrl } from "@/lib/workspace-url";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-/**
- * GET /api/workspaces/open
- * Server-side redirect to the GSD workspace with auth token injected.
- * The token never touches the frontend — it's added server-side in the redirect URL.
- */
 export const GET = auth(async (req) => {
   if (!req.auth || !req.auth.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -43,11 +39,16 @@ export const GET = auth(async (req) => {
     );
   }
 
-  // Build the workspace URL with token in hash fragment.
-  // Use the Host header to determine the correct hostname for the redirect.
-  const reqUrl = new URL(req.url);
-  const host = reqUrl.hostname;
-  const workspaceUrl = `http://${host}:${instance.port}/#token=${accessToken}`;
+  // Try domain-based URL first, fallback to direct port
+  const domainUrl = await getWorkspaceUrl(Number(user.id), user.username, instance.port);
+
+  let workspaceUrl: string;
+  if (domainUrl) {
+    workspaceUrl = `${domainUrl}/#token=${accessToken}`;
+  } else {
+    const reqUrl = new URL(req.url);
+    workspaceUrl = `http://${reqUrl.hostname}:${instance.port}/#token=${accessToken}`;
+  }
 
   return NextResponse.redirect(workspaceUrl);
 });

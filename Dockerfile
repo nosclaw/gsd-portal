@@ -17,8 +17,8 @@ ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
-# Install git (required by GSD) and GSD CLI
-RUN apk add --no-cache git && npm install -g gsd-pi
+# Install runtime dependencies and GSD CLI
+RUN apk add --no-cache git bash curl && npm install -g gsd-pi
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static

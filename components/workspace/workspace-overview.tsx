@@ -108,9 +108,10 @@ export function WorkspaceOverview() {
     );
   }
 
-  const { instance, session } = data;
+  const { instance, session, workspaceUrl } = data;
   const isRunning = instance?.status === "RUNNING";
   const isStarting = instance?.status === "STARTING";
+  const displayUrl = workspaceUrl || (isRunning ? `${window.location.hostname}:${instance.port}` : null);
 
   return (
     <Card className="surface">
@@ -138,7 +139,7 @@ export function WorkspaceOverview() {
               </p>
               <div className="mt-1 flex items-center justify-between">
                 <p className="font-mono font-medium">
-                  {isRunning ? `${window.location.hostname}:${instance.port}` : "Not assigned"}
+                  {displayUrl || "Not assigned"}
                 </p>
                 {isRunning && (
                   <Button

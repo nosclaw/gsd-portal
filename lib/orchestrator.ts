@@ -39,6 +39,7 @@ function spawnGsdWeb(
       cwd: workspaceDir,
       env: {
         ...process.env,
+        HOME: workspaceDir,
         GIT_AUTHOR_NAME: username,
         GIT_AUTHOR_EMAIL: email ?? `${username}@nosclaw.local`,
         GIT_COMMITTER_NAME: username,
@@ -94,9 +95,8 @@ function spawnGsdWeb(
  */
 async function findGsdWebPid(workspaceDir: string): Promise<number | null> {
   try {
-    // GSD stores web instances in ~/.gsd/web-instances.json
-    const home = process.env.HOME || "/root";
-    const registryPath = join(home, ".gsd", "web-instances.json");
+    // GSD stores web instances in ~/.gsd/web-instances.json (HOME = workspaceDir)
+    const registryPath = join(workspaceDir, ".gsd", "web-instances.json");
     const content = await readFile(registryPath, "utf8");
     const registry = JSON.parse(content);
     const resolvedCwd = resolve(workspaceDir);

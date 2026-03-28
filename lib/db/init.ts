@@ -40,7 +40,7 @@ const SCHEMA_SQL = [
   `CREATE TABLE IF NOT EXISTS dev_env_versions (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     user_id INTEGER NOT NULL REFERENCES users(id),
-    commit TEXT NOT NULL,
+    commit_hash TEXT NOT NULL,
     repo_url TEXT NOT NULL,
     branch TEXT NOT NULL,
     installed_at INTEGER NOT NULL,
