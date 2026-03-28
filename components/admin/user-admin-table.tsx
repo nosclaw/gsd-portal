@@ -12,6 +12,8 @@ import { useSession } from "next-auth/react";
 
 import { StatusChip } from "@/components/shared/status-chip";
 import { ConfirmModal } from "@/components/shared/confirm-modal";
+import { TableSearch, TablePagination, SortableHeader } from "@/components/shared/table-controls";
+import { useTable } from "@/lib/use-table";
 
 export function UserAdminTable() {
   const { data: session } = useSession();
@@ -129,22 +131,36 @@ export function UserAdminTable() {
   const isRootAdmin = (role: string) => role === "ROOT_ADMIN";
   const isCurrentRootAdmin = currentUser?.role === "ROOT_ADMIN";
 
+  const table = useTable({
+    data: users,
+    defaultSort: { key: "name", dir: "asc" },
+    pageSize: 10,
+    searchKeys: ["name", "username", "email", "role", "status"]
+  });
+
   return (
     <>
       <Card className="surface">
-        <CardHeader className="flex flex-col items-start gap-1 px-6 pt-6">
-          <p className="text-sm text-muted">User queue</p>
-          <h3 className="text-2xl font-semibold tracking-tight">Approvals & access</h3>
+        <CardHeader className="flex flex-col gap-4 px-6 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm text-muted">User queue</p>
+            <h3 className="text-2xl font-semibold tracking-tight">Approvals & access</h3>
+          </div>
+          <TableSearch
+            value={table.search}
+            onChange={table.setSearch}
+            placeholder="Search users..."
+          />
         </CardHeader>
-        <CardContent className="px-3 pb-4 pt-0">
+        <CardContent className="space-y-3 px-3 pb-4 pt-0">
           <div className="overflow-hidden rounded-[22px] border border-black/6 dark:border-white/8">
             <table className="w-full border-collapse text-left">
               <thead className="bg-black/3 dark:bg-white/4">
                 <tr className="text-xs uppercase tracking-[0.2em] text-muted">
-                  <th className="px-4 py-4 font-medium">User</th>
-                  <th className="px-4 py-4 font-medium">Role</th>
-                  <th className="px-4 py-4 font-medium">Status</th>
-                  <th className="px-4 py-4 font-medium">Joined</th>
+                  <SortableHeader label="User" sortKey="name" currentKey={table.sortKey as string} currentDir={table.sortDir} onSort={table.toggleSort} />
+                  <SortableHeader label="Role" sortKey="role" currentKey={table.sortKey as string} currentDir={table.sortDir} onSort={table.toggleSort} />
+                  <SortableHeader label="Status" sortKey="status" currentKey={table.sortKey as string} currentDir={table.sortDir} onSort={table.toggleSort} />
+                  <SortableHeader label="Joined" sortKey="joinedAt" currentKey={table.sortKey as string} currentDir={table.sortDir} onSort={table.toggleSort} />
                   <th className="px-4 py-4 font-medium">Actions</th>
                 </tr>
               </thead>
@@ -171,7 +187,7 @@ export function UserAdminTable() {
                     </td>
                   </tr>
                 ) : (
-                  users.map((row) => (
+                  table.rows.map((row) => (
                     <tr key={row.id} className="border-t border-black/6 dark:border-white/8">
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
@@ -344,6 +360,15 @@ export function UserAdminTable() {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            page={table.page}
+            totalPages={table.totalPages}
+            totalFiltered={table.totalFiltered}
+            totalAll={table.totalAll}
+            perPage={table.perPage}
+            onPageChange={table.setPage}
+            onPerPageChange={table.setPerPage}
+          />
         </CardContent>
       </Card>
 
