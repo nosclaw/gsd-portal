@@ -4,17 +4,23 @@ Multi-tenant workspace management platform for [GSD](https://github.com/nosclaw/
 
 ## Screenshots
 
-| Login | Dashboard |
-|:---:|:---:|
-| ![Login](docs/images/image.png) | ![Dashboard](docs/images/image1.png) |
+### Authentication
 
-| Workspace Runtime | Tenant Approvals |
-|:---:|:---:|
-| ![Workspace Runtime](docs/images/image2.png) | ![Tenant Approvals](docs/images/image3.png) |
+![Login & Registration](docs/images/image.png)
 
-| Workspace Management |
-|:---:|
-| ![Workspace Management](docs/images/image4.png) |
+### Command Center
+
+![GSD Command Center — real-time platform health, member status, workspace activity](docs/images/image1.png)
+
+### Workspace
+
+| Workspace Runtime | Workspace Management |
+|:---:|:---:|
+| ![Per-user workspace runtime, token lifecycle, dev environment status](docs/images/image2.png) | ![All workspace instances — status, ports, PID, force-stop](docs/images/image4.png) |
+
+### Tenant Administration
+
+![Tenant approvals — onboard members, manage roles, suspend access](docs/images/image3.png)
 
 ## Architecture
 
