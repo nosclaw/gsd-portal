@@ -10,16 +10,55 @@ Applicable to all programming languages and project types.
 
 ```
 The only human inputs are PRD.md and the number of workspaces.
-Everything else — tech selection, task splitting, Git setup, coding,
-committing, collaboration, merging — is fully automated.
-Each workspace runs /gsd auto and works fully autonomously with no human supervision.
+Built entirely on GSD native mechanisms — milestone system, parallel orchestrator, worktree isolation.
+Each workspace runs /gsd auto and works fully autonomously.
 ```
+
+---
+
+## GSD Native Mechanisms Overview
+
+This best practice is built entirely on GSD's existing native capabilities — no custom file formats or additional skills required.
+
+| GSD Native Mechanism | How We Use It |
+|---------------------|---------------|
+| **Milestone system** | Phase 0 creates milestones via GSD's native discussion flow |
+| **`{MID}-CONTEXT.md`** | Auto-generated: goals, acceptance criteria, constraints |
+| **`{MID}-ROADMAP.md`** | Auto-generated: slice list and execution plan |
+| **`{SID}-PLAN.md`** | Auto-generated: task breakdown per slice |
+| **Parallel orchestrator** | `parallel.enabled: true` for multi-worker parallel dev |
+| **Worktree isolation** | Each worker runs in an isolated worktree |
+| **`GSD_MILESTONE_LOCK`** | Each worker locked to one milestone |
+| **`custom_instructions`** | Append mode — does not override system defaults |
+| **`.gsd/KNOWLEDGE.md`** | Project knowledge auto-injected into every agent prompt |
+| **`pre_dispatch_hooks`** | Inject instructions before task execution |
+| **`post_unit_hooks`** | Trigger checks after task completion (e.g., dependency detection) |
+
+### GSD Native Milestone Lifecycle
+
+```
+Discussion → CONTEXT-DRAFT.md
+           → {MID}-CONTEXT.md (goals, acceptance criteria, constraints)
+           → {MID}-RESEARCH.md (optional, skippable)
+           → {MID}-ROADMAP.md (slice list + execution plan)
+           → Per slice:
+               → {SID}-RESEARCH.md (optional)
+               → {SID}-PLAN.md (task list)
+               → tasks/T01-PLAN.md, T02-PLAN.md... (concrete tasks)
+               → Execution → T01-SUMMARY.md...
+               → {SID}-SUMMARY.md
+           → {MID}-VALIDATION.md
+           → {MID}-SUMMARY.md
+```
+
+All files are auto-managed in `~/.gsd/projects/{hash}/milestones/M00N/`.
+**Do not** create custom milestone files in the project root.
 
 ---
 
 ## Workspace (WS)
 
-A Workspace is a fully isolated development environment in GSD Portal:
+A WS is a fully isolated development environment in GSD Portal:
 
 ```
 ┌─────────────────────────────────────┐
@@ -28,11 +67,12 @@ A Workspace is a fully isolated development environment in GSD Portal:
 │  • /home/{username}/                │
 │  • Independent Provider API Key     │
 │  • Independent GSD Agent instance   │
+│  • Independent ~/.gsd/projects/     │
 │                                     │
 │  After /gsd auto, autonomously:     │
-│  • Codes in Git Worktree            │
+│  • GSD native milestone flow        │
+│  • Codes in worktree                │
 │  • Tests → commit → push → PR      │
-│  • Auto-fixes per review feedback   │
 └─────────────────────────────────────┘
 ```
 
@@ -43,44 +83,70 @@ A Workspace is a fully isolated development environment in GSD Portal:
 | Role | Count | Responsibility |
 |------|-------|---------------|
 | **Project Lead** | 1 human | Provide PRD.md, confirm planning output, final release |
-| **Planning WS** | 1 | Phase 0: tech selection, generate config, split tasks, Git init |
+| **Planning WS** | 1 | Phase 0: tech selection, generate config, create milestones via GSD discussion flow |
 | **Tech Manager WS** | 1 | PR review, conflict resolution, merge to main, acceptance |
-| **Dev WS 1~N** | N | Each completes one milestone end-to-end |
+| **Dev WS 1~N** | N | Each locked to one milestone (`GSD_MILESTONE_LOCK`) |
 
 > Total: N+1 workspaces. Planning WS can reuse Dev WS1.
 
-### How Roles Are Injected
+---
 
-GSD's native PREFERENCES.md does not have a `Role` field. The correct approach:
+## Configuration
 
-**Project-level PREFERENCES.md** (shared by all WSs, in the Git repo):
+### Project-level `.gsd/PREFERENCES.md` (shared by all WSs)
+
 ```yaml
 mode: auto
 always_use_skills:
   - standards
   - review
   - test
+parallel:
+  enabled: true
+  max_workers: 3                    # = dev WS count
+  merge_strategy: per-milestone
+  auto_merge: confirm
 git:
   worktree: true
   branch_protection: main
   merge_method: pr_only
   auto_push: true
   auto_pr: true
+phases:
+  skip_research: true               # Skip research phase for speed
+  reassess_after_slice: true        # Reassess roadmap after each slice
 custom_instructions:
   - All code must be real business logic — no mock/stub
   - Follow engineering standards from ~/.gsd/standards/
 ```
 
-**Roles are defined via Milestone Context files.** Each WS reads its assigned context file, which contains that WS's role, branch, and task list. No separate Role mechanism needed — the context file IS the instruction.
+### Project-level `.gsd/KNOWLEDGE.md` (auto-injected into every prompt)
 
-**Portal orchestrator injection:** When launching a WS, the Portal writes the corresponding context file path into the workspace-level `~/.gsd/preferences.md`:
+```markdown
+# Project Knowledge
 
-```yaml
-custom_instructions:
-  - Read milestones/m1-user-module-context.md and execute per its instructions
+## Tech Stack
+- Language: TypeScript
+- Runtime: Bun
+- Framework: Next.js 15
+- Database: PostgreSQL + Drizzle ORM
+- Package manager: bun
+
+## Module Boundaries
+- Each milestone maps to an independent directory: src/modules/{module-name}/
+- Shared code lives in src/shared/
+- No cross-module direct file modifications
+- Inter-module interaction through src/shared/ interface contracts
+
+## Coding Constraints
+- API response format: { data, error: { code, message } }
+- Database operations use transactions for multi-table writes
+- All API routes require unit tests
 ```
 
-Tech Manager WS workspace-level preferences:
+### Workspace-level `~/.gsd/preferences.md` (injected by Portal orchestrator)
+
+Tech Manager WS:
 ```yaml
 custom_instructions:
   - You are the Tech Manager, do not write business code
@@ -89,78 +155,36 @@ custom_instructions:
   - Verify against PRD.md acceptance criteria item by item
 ```
 
----
-
-## Dependency Coordination Mechanism
-
-When WS3's M3 depends on WS1's M1, how is WS3 notified?
-
-### Option 1: Git Polling (zero dependencies, works immediately)
-
-**Git itself is the notification mechanism.** After WS3 starts `/gsd auto`:
-
-1. Checks if main branch contains M1 code (`git log main` or check for specific files)
-2. If not merged → wait and poll periodically
-3. After M1 merges to main → WS3 detects the change → pulls latest main → starts M3
-
-Declared in the context file:
-```markdown
-## Dependencies
-- Depends on M1 (feat/user-module)
-- Pre-start check: main branch contains src/modules/user/ directory
-- If dependency not ready, check main branch every 60 seconds
+Dev WSs:
+```yaml
+# No extra injection needed — GSD native milestone system handles this
+# via GSD_MILESTONE_LOCK environment variable
 ```
-
-### Option 2: GSD Extension — Agent Mailbox (requires development)
-
-GSD's extension system supports custom tools, commands, and event hooks. An `agent-mailbox` extension could be built:
-
-```
-~/.gsd/agent/extensions/agent-mailbox/
-├── extension-manifest.json
-├── index.js
-└── mailbox/                    # Shared message directory
-    ├── ws1-inbox.jsonl
-    ├── ws2-inbox.jsonl
-    └── ws3-inbox.jsonl
-```
-
-**Extension-provided tools:**
-- `mailbox_send(to, message)` — Tech Manager sends "M1_MERGED" to WS3
-- `mailbox_check()` — Agent checks its inbox
-- `mailbox_wait(condition)` — Block until specific message arrives
-
-**Extension-provided hooks:**
-- `session_start` — Check inbox on startup
-- `turn_end` — Check for new messages after each turn
-
-**No related unmerged PRs found in the GSD official repository.** This is a new feature area.
-
-### Recommendation
-
-Use Option 1 (Git polling) first — zero dependencies, aligns with "Git is the only collaboration channel." Option 2 as future optimization.
 
 ---
 
 ## Automated Flow
 
 ```
-            PRD.md + Workspace count N
+            PRD.md + WS count N
                     │
         ┌───────────▼───────────┐
         │  Planning WS          │
         │  /gsd auto            │
         │                       │
+        │  GSD native flow:     │
         │  • Tech selection     │
-        │  • Generate PREFS.md  │
-        │  • Milestone + Slice  │
-        │  • Milestone Context  │
+        │  • PREFERENCES.md     │
+        │  • KNOWLEDGE.md       │
+        │  • N+1 milestones:    │
+        │    M0 dep layer       │
+        │    M1~MN parallel     │
         │  • Git initialization │
         │  • WS assignment table│
         └───────────┬───────────┘
                     │
         ┌───────────▼───────────┐
-        │  Project Lead confirms │  ← Only human checkpoint
+        │  Project Lead confirms │
         └───────────┬───────────┘
                     │
   ┌─────────────────┼──────────────────┐
@@ -168,13 +192,16 @@ Use Option 1 (Git polling) first — zero dependencies, aligns with "Git is the 
 ┌──────────┐                 ┌──────────────────┐
 │ WS1      │                 │ Tech Manager WS  │
 │ /gsd auto│                 │ /gsd auto        │
-│          │                 │                  │
+│ LOCK=M0  │                 │                  │
+│          │                 │ Continuous:      │
 │ M0 → PR  │──── PR ───────▶│ Review → Merge   │
 └────┬─────┘                 │                  │
      │ After M0 merges       │                  │
 ┌────┼────┐                  │                  │
 ▼    ▼    ▼                  │                  │
 WS1  WS2  WSN                │                  │
+LOCK LOCK LOCK               │                  │
+=M1  =M2  =MN               │                  │
 /gsd /gsd /gsd              │                  │
 auto auto auto              │                  │
  │    │    │                  │                  │
@@ -184,155 +211,130 @@ auto auto auto              │                  │
                               └──────────────────┘
 ```
 
----
+### Phase 0: Automated Planning
 
-## Phase 0: Automated Planning
+Uses GSD's native **discussion flow** (`showSmartEntry`). The Planning WS starts `/gsd auto` then:
 
-A standard `/gsd auto` session — no special skills or extensions needed.
+1. GSD enters discussion phase, reads PRD.md
+2. Creates milestones through the native flow:
+   - Each milestone generates `{MID}-CONTEXT.md` (goals, acceptance criteria, constraints)
+   - Then generates `{MID}-ROADMAP.md` (slice list)
+3. Generates `.gsd/PREFERENCES.md` and `.gsd/KNOWLEDGE.md`
+4. Outputs WS assignment table
 
-### Output 1: Tech Stack Selection
+**Tech selection priorities:**
 
 | Priority | Principle | Example |
 |----------|-----------|---------|
-| 1 | **Prefer latest, most popular tech** | bun > pnpm > yarn > npm |
-| 2 | **Choose higher performance** | Bun runtime > Node.js |
-| 3 | **Choose better developer experience** | Next.js > CRA, Nuxt > Vue CLI |
-| 4 | **Choose type-safe options** | TypeScript > JavaScript |
-| 5 | **Follow PRD when explicitly specified** | PRD requires Python → use Python |
+| 1 | Latest and most popular | bun > pnpm > npm |
+| 2 | Higher performance | Bun > Node.js |
+| 3 | Better developer experience | Next.js > CRA |
+| 4 | Type-safe | TypeScript > JavaScript |
+| 5 | Follow PRD when explicit | PRD requires Python → Python |
 
-### Output 2: PREFERENCES.md
+### Slice Assignment
 
-Written to project root, shared by all WSs. Contains skills, git workflow, custom_instructions.
+In GSD's native milestone system, slices are defined in `{MID}-ROADMAP.md`. Within a single WS, GSD executes slices sequentially (or in parallel via `reactive_execution`).
 
-### Output 3: Milestone Context Files
+For assigning slices to different WSs: GSD does not natively support cross-agent slice assignment. **The recommended approach: promote slices that need parallel development into independent milestones**, then lock each WS to a different milestone.
 
-```
-milestones/
-├── m0-foundation-context.md
-├── m1-user-module-context.md
-├── m2-payment-module-context.md
-├── m3-admin-module-context.md
-└── tech-manager-context.md
-```
+---
 
-Each context file = complete work instructions for that WS:
+## Dependency Coordination
 
-```markdown
-# M1 — User Management Module
+When WS3's M3 depends on WS1's M1, a coordination mechanism is needed.
 
-## Assignment
-- Workspace: WS1
-- Branch: feat/user-module
+### Current: `post_unit_hooks` + Git Check
 
-## Objective
-Requirements summary for this module, extracted from PRD.md.
+Use GSD's native `post_unit_hooks` to check dependency state after each task:
 
-## Dependencies
-- Depends on M0 (feat/foundation) — must be merged to main
-- Pre-start check: main branch contains src/shared/ directory
-
-## Slice List
-
-### S1.1 User Registration / Login API
-- Implementation: POST /api/auth/register, POST /api/auth/login
-- Acceptance Criteria:
-  - Registration returns 201 + user ID
-  - Passwords hashed with bcrypt
-  - Login returns JWT token
-- Dependencies: M0 auth middleware + user type definitions
-
-### S1.2 User List Page + Search/Filter
-- Implementation: GET /api/users (paginated), frontend list page
-- Acceptance Criteria:
-  - Search by username, email
-  - Response: { data: [], total, page, perPage }
-- Dependencies: M0 shared table component + API client
-
-### S1.3 User Detail Editing + Permissions
-- Implementation: PUT /api/users/:id, frontend edit form
-- Acceptance Criteria:
-  - Only ADMIN can edit other users
-  - Returns 200 + updated user
-- Dependencies: M0 permission utilities
-
-### S1.4 Tests
-- Acceptance Criteria: 100% API route coverage + permission boundary tests
-
-## Module Boundaries
-- Only modify files under src/modules/user/
-- Use M0 shared types and components without modifying them
-
-## Workflow
-- Work in feat/user-module branch worktree
-- commit + push after each Slice
-- Create PR to main when all Slices complete
-- Auto-fix per Tech Manager review feedback
+```yaml
+# .gsd/PREFERENCES.md
+post_unit_hooks:
+  - name: check-dependency
+    after: [execute-task]
+    run: "git fetch origin main && git log origin/main --oneline | head -5"
 ```
 
-**Tech Manager context file:**
+WS3's context declares the dependency. The agent checks if main contains M1 code before starting.
 
-```markdown
-# Tech Manager
+**Limitations:**
+- `post_unit_hooks` output enters agent context but cannot block execution
+- Agent must self-judge whether to wait
+- No true "blocking wait" mechanism
 
-## Role
-Tech Manager — does not write business code.
+### Future: Agent Mailbox Extension
 
-## Responsibilities
-- Continuously monitor all open PRs
-- Review code quality, security, standards compliance
-- Resolve merge conflicts, preserving intent from both sides
-- Merge to protected main branch
-- Merge in dependency order (M0 → M1/M2 → M3 that depends on M1)
-- Verify against PRD.md acceptance criteria item by item
-- Output acceptance report after all modules merge
+A GSD extension for cross-workspace dependency coordination is fully feasible:
 
-## Merge Priority
-1. M0 (dependency layer) — highest priority
-2. Independent parallel modules (M1, M2) — by PR submission order
-3. Dependent modules (M3 depends on M1) — merge after upstream is merged
-```
-
-### Output 4: WS Assignment Table
+**Architecture:**
 
 ```
-=== WS Assignment Table ===
-
-Tech Manager WS → milestones/tech-manager-context.md
-  Responsibilities: PR review, conflict resolution, merge, acceptance
-
-───────────────────────────────────────
-  Dependency Layer (must complete first)
-───────────────────────────────────────
-
-  WS1 → M0 Project Foundation
-    Branch: feat/foundation
-    Context: milestones/m0-foundation-context.md
-    Slices: S0.1~S0.5
-
-───────────────────────────────────────
-  Parallel Layer (all start after M0 merges)
-───────────────────────────────────────
-
-  WS1 → M1 User Management
-    Branch: feat/user-module
-    Context: milestones/m1-user-module-context.md
-    Slices: S1.1~S1.4
-
-  WS2 → M2 Payment
-    Branch: feat/payment-module
-    Context: milestones/m2-payment-module-context.md
-    Slices: S2.1~S2.4
-
-  WS3 → M3 Admin Panel (depends on M1)
-    Branch: feat/admin-module
-    Context: milestones/m3-admin-module-context.md
-    Slices: S3.1~S3.4
-    Note: starts after M1 merges
+~/.gsd/agent/extensions/agent-mailbox/
+├── extension-manifest.json
+├── index.js
+└── shared/                     # Shared message directory (all WSs access)
+    └── mailbox.jsonl
 ```
 
-### Output 5: Git Initialization
+**extension-manifest.json:**
+```json
+{
+  "id": "agent-mailbox",
+  "name": "Agent Mailbox",
+  "version": "1.0.0",
+  "description": "Cross-workspace dependency coordination via shared message queue",
+  "tier": "custom",
+  "provides": {
+    "tools": ["mailbox_send", "mailbox_wait", "mailbox_check"],
+    "hooks": ["session_start"]
+  }
+}
+```
 
-Main branch protection + create feature branches.
+**How it works:**
+
+Tech Manager merges M1, then:
+```
+→ Calls mailbox_send({ to: "ws3", type: "DEPENDENCY_READY", data: { milestone: "M1" } })
+```
+
+WS3's agent on startup:
+```
+→ session_start hook checks inbox
+→ Finds DEPENDENCY_READY message
+→ Begins M3 execution
+```
+
+**Recommended: Non-blocking polling pattern:**
+
+```javascript
+// Background polling + inject message when ready
+pi.on("session_start", () => {
+  const interval = setInterval(async () => {
+    const messages = readMailbox().filter(m => m.to === process.env.USER && !m.consumed);
+    if (messages.length > 0) {
+      markConsumed(messages);
+      clearInterval(interval);
+      pi.sendMessage({
+        customType: "dependency-ready",
+        content: `Dependencies ready: ${messages.map(m => m.data.milestone).join(", ")}. Starting work.`,
+        display: true
+      }, { triggerTurn: true, deliverAs: "followUp" });
+    }
+  }, 10000);  // Check every 10 seconds
+});
+```
+
+**Feasibility assessment:**
+
+| Aspect | Assessment |
+|--------|-----------|
+| Technical feasibility | ✅ Fully feasible — `pi.registerTool()` + `pi.sendMessage()` + `pi.on()` are existing APIs |
+| Shared storage | ✅ All WSs can access shared path (e.g., `/opt/shared/` or `.gsd-mailbox/` in git repo) |
+| Message reliability | ⚠️ JSONL append writes need file locking for concurrent write safety |
+| Blocking wait | ⚠️ `mailbox_wait` blocks a tool call. Recommend non-blocking polling + `pi.sendMessage()` |
+| Message cleanup | Needs periodic cleanup of consumed messages |
 
 ---
 
@@ -341,7 +343,7 @@ Main branch protection + create feature branches.
 ```
             ┌─────────────┐
             │  M0 Dep Layer│  ← Must complete first
-            │  WS1         │
+            │  WS1 LOCK=M0│
             └──────┬──────┘
                    │ PR → Tech Manager merges
        ┌───────────┼───────────┐
@@ -351,9 +353,11 @@ Main branch protection + create feature branches.
 │ WS1      │ │ WS2      │     │
 └────┬─────┘ └──────────┘     │
      │ After M1 merges         │
+     │ Tech Manager sends      │
+     │ DEPENDENCY_READY         │
      └─────────────────────────▼
                          ┌──────────┐
-                         │ M3 Admin │  ← Waits for M1
+                         │ M3 Admin │  ← mailbox_wait or Git check
                          │ WS3      │
                          └──────────┘
 ```
@@ -361,24 +365,9 @@ Main branch protection + create feature branches.
 **Splitting rules:**
 - Shared dependencies → M0 (types, schema, base components, middleware)
 - Parallel module count = WS count N
-- Each module = milestone (M1, M2...) = multiple slices (S1.1, S1.2...)
-- Each slice includes: implementation, acceptance criteria, dependencies
+- If slices within a milestone need different WSs → promote to independent milestones
 - Each module has its own directory — no cross-module edits
-
-**Dependency detection (Git polling):**
-- WS3 starts, checks if main contains M1 code
-- Not ready → poll `git fetch && git log main` every 60 seconds
-- M1 merged → pull main → start M3
-
----
-
-## GSD Configuration Hierarchy
-
-```
-Project PREFERENCES.md (Git repo, shared by all WSs)
-  > ~/.gsd/preferences.md (WS-level, Portal orchestrator injects context path)
-    > ~/.gsd/projects/{hash}/preferences.md (GSD auto-managed)
-```
+- M0 defines interface contracts
 
 ---
 
@@ -402,17 +391,18 @@ Project PREFERENCES.md (Git repo, shared by all WSs)
 
 ```
 1. Project Lead → PRD.md + WS count N
-2. Planning WS → /gsd auto → auto-generates:
-   • Tech stack selection
-   • PREFERENCES.md
-   • milestones/ directory (context file per milestone + tech-manager)
-   • WS assignment table
-   • Git initialization
+2. Planning WS → /gsd auto:
+   • GSD native discussion flow → create milestones (M0~MN)
+   • Each milestone auto-generates CONTEXT.md + ROADMAP.md
+   • Generate .gsd/PREFERENCES.md (parallel + git workflow)
+   • Generate .gsd/KNOWLEDGE.md (tech stack + module boundaries)
+   • Output WS assignment table (WS → milestone → GSD_MILESTONE_LOCK)
 3. Project Lead → confirm
-4. Portal orchestrator → inject context path into each WS
-5. WS1 → /gsd auto → M0 dep layer → PR
+4. Portal orchestrator → set GSD_MILESTONE_LOCK env var per WS
+5. WS1 (LOCK=M0) → /gsd auto → completes M0 → PR
 6. Tech Manager WS → /gsd auto → review → merge M0
-7. WS1~N → each /gsd auto → parallel dev (dependent WSs auto-poll) → PR
+7. WS1~N → /gsd auto (each LOCK=M1~MN) → parallel dev → PR
+   • Dependent WSs wait via Agent Mailbox or Git check
 8. Tech Manager → review → resolve conflicts → merge → acceptance report
 9. Project Lead → confirm → release
 ```
