@@ -2,6 +2,20 @@
 
 Multi-tenant workspace management platform for [GSD](https://github.com/nosclaw/gsd). Provides user authentication, workspace orchestration, dev environment initialization, and a unified domain-based access layer.
 
+## Screenshots
+
+| Login | Dashboard |
+|:---:|:---:|
+| ![Login](docs/images/image.png) | ![Dashboard](docs/images/image1.png) |
+
+| Workspace Runtime | Tenant Approvals |
+|:---:|:---:|
+| ![Workspace Runtime](docs/images/image2.png) | ![Tenant Approvals](docs/images/image3.png) |
+
+| Workspace Management |
+|:---:|
+| ![Workspace Management](docs/images/image4.png) |
+
 ## Architecture
 
 ```
