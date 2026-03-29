@@ -20,6 +20,10 @@
 - [部署设计](./deployment-design.md)：定义 Docker Compose 自托管方式、多环境配置、持久化、健康检查与升级回滚。
 - [研发任务拆解](./task-breakdown.md)：将 MVP/V1 拆成 Epic、Story、依赖、交付物和验收标准。
 
+### GSD 团队开发
+- [GSD 团队自动化最佳实践](./gsd-project-best-practices.zh-CN.md)（[English](./gsd-project-best-practices.md)）：多工作空间全自动并行开发流程
+- [Portal Messenger 设计](./portal-messenger-design.md)：跨工作空间 WebSocket 实时通信系统
+
 ### 使用方式
 - 产品评审：先看 `PRD.md`
 - 技术评审：再看系统设计、数据设计与前端 UI 规范

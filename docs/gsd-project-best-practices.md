@@ -377,70 +377,47 @@ For assigning slices to different WSs: GSD does not natively support cross-agent
 
 ## Progress Reporting & Dependency Coordination
 
-All WSs must report to Tech Manager when **starting work, progress updates, and completion**. Cross-machine WSs need real-time communication.
+All WSs report to Tech Manager at **start, progress updates, and completion**. Cross-machine WSs communicate in real-time via Portal WebSocket Hub.
 
-### Ecosystem Research
+For the full design, see **[Portal Messenger Design Document](./portal-messenger-design.md)**.
 
-| Project | Stars | Approach | Relevance |
-|---------|-------|----------|-----------|
-| **23blocks-OS/ai-maestro** | 571 | Peer mesh + AMP protocol + Dashboard | Most complete, but complex (no center) |
-| **mainion-ai/agent-mailbox** | — | MCP native, HTTP+SQLite, 4 tools | Clean and simple, single machine |
-| **lleontor705/agent-mailbox** | — | SQLite, DLQ, visibility timeout, broadcast | Production-grade features, single machine |
-| **gsd-build/context-packet** | 12 | DAG context passing, MCP server | GSD official, no real-time comms |
-
-**No cross-agent communication exists in the GSD ecosystem.** This is a greenfield area.
-
-### Recommended: Portal WebSocket Hub
-
-**GSD Portal is already the central hub for all WSs.** No need for peer mesh or standalone services — Portal is the natural message router.
+### Core Architecture
 
 ```
-┌─────────┐  ┌─────────┐  ┌─────────┐
-│  WS1    │  │  WS2    │  │  WS3    │
-│  Agent  │  │  Agent  │  │  Agent  │
-└────┬────┘  └────┬────┘  └────┬────┘
-     │ WS         │ WS         │ WS
-     └────────────┼────────────┘
-                  │
-         ┌────────▼────────┐
-         │   GSD Portal    │
-         │   WebSocket Hub │
-         │                 │
-         │  • Message route│
-         │  • Progress agg │
-         │  • Dep monitor  │
-         │  • Status bcast │
-         └────────┬────────┘
-                  │ WS
-         ┌────────▼────────┐
-         │ Tech Manager WS │
-         └─────────────────┘
+  WS1 ──┐               ┌── Tech Manager WS
+  WS2 ──┤── WebSocket ──┤
+  WS3 ──┘  (cross-machine) └── Dashboard
+                │
+         GSD Portal
+         WebSocket Hub
 ```
 
-### GSD Extension: Portal Messenger
+Portal is already the central hub for all WSs — the natural message router. No peer mesh or standalone service needed.
 
-Each WS installs a GSD extension that connects to Portal via WebSocket:
+### GSD Extension: portal-messenger
 
-**Tools provided:**
+Auto-installed in each WS, connects to Portal via WebSocket, provides 3 tools:
 
-| Tool | Purpose | Example |
-|------|---------|---------|
-| `portal_send` | Send message to specific WS or Tech Manager | `portal_send({ to: "ws3", type: "DEPENDENCY_READY" })` |
-| `portal_wait` | Non-blocking wait for message type (returns immediately, notified via follow-up) | `portal_wait({ type: "DEPENDENCY_READY" })` |
-| `portal_report_progress` | Report progress to Tech Manager | `portal_report_progress({ status: "S1.2 done", progress: 50 })` |
+| Tool | Purpose |
+|------|---------|
+| `portal_send` | Send message to specific WS or Tech Manager |
+| `portal_wait` | Non-blocking wait (auto-notified via WebSocket) |
+| `portal_report_progress` | Report progress (started → slice done → PR created) |
 
-**Message types:**
+### Message Types
 
-| Type | From | To | Trigger |
-|------|------|-----|---------|
-| `PROGRESS` | All WSs | Tech Manager | Start work, complete Slice, complete milestone |
-| `DEPENDENCY_READY` | Tech Manager | Dependent WS | Upstream milestone merged to main |
-| `REVIEW_REQUEST` | Dev WS | Tech Manager | PR created |
-| `REVIEW_FEEDBACK` | Tech Manager | Dev WS | PR review has change requests |
-| `MILESTONE_COMPLETE` | Tech Manager | broadcast | Milestone acceptance passed |
-| `QUESTION` | Any WS | Tech Manager | Agent needs coordination help |
+| Type | Direction | Trigger |
+|------|-----------|---------|
+| `PROGRESS` | Dev WS → Tech Manager | Start, Slice complete, PR created |
+| `DEPENDENCY_READY` | Tech Manager → Waiting WS | Upstream milestone merged |
+| `REVIEW_REQUEST` | Dev WS → Tech Manager | PR created |
+| `REVIEW_FEEDBACK` | Tech Manager → Dev WS | PR has change requests |
+| `MILESTONE_COMPLETE` | Tech Manager → broadcast | Acceptance passed |
+| `QUESTION` | Any WS → Tech Manager | Needs coordination |
 
-**Progress reporting rules** (declared in `.gsd/KNOWLEDGE.md`):
+### Progress Reporting Rules
+
+Declared in `.gsd/KNOWLEDGE.md`:
 
 ```markdown
 ## Progress Reporting
