@@ -56,11 +56,6 @@ export async function GET() {
 
     return apiSuccess({
       status: "ready",
-      appBaseUrl: appEnv.appBaseUrl,
-      workspaceRootDir: appEnv.workspaceRootDir,
-      sqliteDbPath: appEnv.sqliteDbPath,
-      sessionRefreshLeewaySeconds: appEnv.sessionRefreshLeewaySeconds,
-      idleReclaimMinutes: appEnv.idleReclaimMinutes,
       diskSpace,
       gsdVersion,
       activeWorkspaces,
