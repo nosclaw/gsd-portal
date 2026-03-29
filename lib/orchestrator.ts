@@ -261,20 +261,6 @@ export async function launchWorkspace(userId: number, username: string, email?: 
     // Config doesn't exist yet — dev-env init will create it
   }
 
-  // ── Run skillshare sync to ensure GSD can discover installed skills ──
-  try {
-    const skillshareConfigPath = resolve(workspaceDir, ".config", "skillshare", "config.yaml");
-    await fsAccess(skillshareConfigPath);
-    await execFileAsync("skillshare", ["sync"], {
-      cwd: workspaceDir,
-      timeout: 30_000,
-      env: { ...process.env, HOME: workspaceDir }
-    });
-    logger.debug("skillshare sync completed.", { userId });
-  } catch {
-    // skillshare not installed or config not ready — dev-env init will handle it
-  }
-
   // ── GSD agent config initialization ──
   // Priority: User's existing config > Admin shared config > System defaults
   //
