@@ -12,3 +12,4 @@ dist
 .bg-shell/
 docker/.deploy/images/
 docker/.deploy/logs/
+docker/.env.staging
