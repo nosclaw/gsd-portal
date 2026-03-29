@@ -163,6 +163,135 @@ custom_instructions:
 
 ---
 
+## 工作空间启动流程
+
+新工作空间启动时是完全空的。需要理解一个关键事实：
+
+> **GSD 里程碑文件是本地的。** `~/.gsd/projects/{hash}/milestones/` 只存在于创建它的 WS 中，不会通过 Git 传递给其他 WS。
+
+因此，每个 WS 需要通过 GSD 原生讨论流程**各自创建自己的里程碑**。规划 WS 的产出通过 Git 仓库中的共享文件（PREFERENCES.md、KNOWLEDGE.md、PLAN.md）引导其他 WS 快速对齐。
+
+### 完整启动链路
+
+```
+Phase 0 规划 WS 的产出（提交到 Git 仓库）：
+─────────────────────────────────────────
+project/
+├── PRD.md                              # 原始需求
+├── PLAN.md                             # 里程碑拆分 + WS 分配表（新增）
+├── .gsd/
+│   ├── PREFERENCES.md                  # 项目配置（parallel、git、skills）
+│   └── KNOWLEDGE.md                    # 技术选型、模块边界、编码约束
+└── src/                                # M0 依赖层代码（骨架 / 共享类型）
+```
+
+### PLAN.md — 团队工作蓝图
+
+这是规划 WS 产出的**核心共享文件**，提交在 Git 仓库中。每个新 WS 启动后，GSD 读取此文件了解自己的任务分配：
+
+```markdown
+# 项目执行计划
+
+## WS 分配
+
+### Tech Manager WS
+- 角色：技术经理，不写业务代码
+- 职责：PR 审查、冲突解决、合并到 main、验收
+
+### WS1 → M0 项目基础层（Phase 2a，先完成）
+- 分支：feat/foundation
+- 目标：项目初始化、共享类型、DB schema、基础组件、认证中间件
+- 验收标准：
+  - src/shared/ 包含完整的类型定义和公共工具
+  - DB migration 可正常执行
+  - 基础 API 框架可运行
+
+### WS1 → M1 用户管理模块（Phase 2b，M0 后并行）
+- 分支：feat/user-module
+- 目标：用户注册/登录、列表、编辑、权限
+- 依赖：M0
+- 验收标准：
+  - CRUD API 完整
+  - 权限控制生效
+  - 测试覆盖
+
+### WS2 → M2 支付模块（Phase 2b，M0 后并行）
+- 分支：feat/payment-module
+- 目标：订单、支付集成、账单
+- 依赖：M0
+- 验收标准：
+  - 订单创建和支付流程完整
+  - 测试覆盖
+
+### WS3 → M3 管理后台（Phase 2b，M1 合并后开始）
+- 分支：feat/admin-module
+- 目标：报表、设置、审计
+- 依赖：M0, M1
+- 验收标准：
+  - 报表数据准确
+  - 审计日志完整
+  - 测试覆盖
+```
+
+### 每个 WS 的启动步骤
+
+```
+┌────────────────────────────────────────────────────────┐
+│ Portal 编排器自动完成（WS 创建时）：                      │
+│                                                        │
+│  1. 创建工作空间 /home/{username}/                       │
+│  2. 配置 .gsd/agent/auth.json（Provider API Key）       │
+│  3. 克隆 Git 仓库到工作空间                              │
+│  4. 写入工作空间级 ~/.gsd/preferences.md：               │
+│     ┌──────────────────────────────────────────┐       │
+│     │ custom_instructions:                      │       │
+│     │   - 读取 PLAN.md，你是 WS2                │       │
+│     │   - 你负责 M2 支付模块                     │       │
+│     │   - 在 feat/payment-module 分支上工作      │       │
+│     │   - 依赖 M0，M0 未合并前不要开始编码        │       │
+│     └──────────────────────────────────────────┘       │
+│  5. 启动 /gsd auto                                     │
+└────────────────────────────────────────────────────────┘
+                    │
+                    ▼
+┌────────────────────────────────────────────────────────┐
+│ GSD Agent 自主完成：                                     │
+│                                                        │
+│  1. 读取 .gsd/PREFERENCES.md + .gsd/KNOWLEDGE.md       │
+│  2. 读取 ~/.gsd/preferences.md（工作空间级指令）          │
+│  3. 读取 PLAN.md，找到自己的分配（WS2 → M2）            │
+│  4. 读取 PRD.md 中 M2 相关的需求                        │
+│  5. 进入 GSD 讨论流程，创建自己的里程碑：                 │
+│     → M001-CONTEXT.md（基于 PLAN.md 中 M2 的定义）       │
+│     → M001-ROADMAP.md（Slice 拆分）                     │
+│  6. 检查依赖：M0 是否已合并到 main？                     │
+│     → 否：等待（Git 轮询或 Mailbox）                     │
+│     → 是：git checkout feat/payment-module               │
+│  7. 开始执行：Slice → Task → 编码 → 测试 → commit       │
+│  8. 全部完成 → 创建 PR 到 main                          │
+└────────────────────────────────────────────────────────┘
+```
+
+### Tech Manager WS 的启动
+
+```
+Portal 编排器写入工作空间级 preferences：
+  custom_instructions:
+    - 读取 PLAN.md，你是 Tech Manager
+    - 不写业务代码
+    - 持续监控所有开放的 PR
+    - 审查代码质量后合并到 main
+    - 对照 PLAN.md 中的验收标准逐条检查
+    - 按依赖顺序合并：M0 → M1/M2 → M3
+
+GSD 启动后：
+  1. 读取 PLAN.md，理解所有里程碑和依赖关系
+  2. 进入持续监控循环
+  3. 不创建自己的里程碑 — 只做 review 和 merge
+```
+
+---
+
 ## 自动化流程
 
 ```
@@ -213,14 +342,16 @@ auto auto auto              │                  │
 
 ### Phase 0：自动规划
 
-使用 GSD 原生的**讨论流程**（`showSmartEntry`）。规划 WS 启动 `/gsd auto` 后：
+使用 GSD 原生的**讨论流程**。规划 WS 启动 `/gsd auto` 后：
 
 1. GSD 进入讨论阶段，读取 PRD.md
-2. 通过讨论流程自动创建里程碑：
-   - 每个里程碑生成 `{MID}-CONTEXT.md`（目标、验收标准、约束）
-   - 然后生成 `{MID}-ROADMAP.md`（Slice 列表）
-3. 同时生成 `.gsd/PREFERENCES.md` 和 `.gsd/KNOWLEDGE.md`
-4. 输出 WS 分配表
+2. 完成技术选型
+3. 生成并提交到 Git 仓库：
+   - `.gsd/PREFERENCES.md` — 项目配置
+   - `.gsd/KNOWLEDGE.md` — 技术选型 + 模块边界 + 编码约束
+   - `PLAN.md` — 里程碑拆分 + WS 分配表 + 验收标准
+   - M0 依赖层的代码骨架（src/shared/ 等）
+4. 创建 Git 分支（feat/foundation, feat/user-module...）
 
 **技术选型优先级：**
 
@@ -452,18 +583,16 @@ pi.on("session_start", () => {
 
 ```
 1. 项目负责人 → PRD.md + WS 数量 N
-2. 规划 WS → /gsd auto:
-   • GSD 原生讨论流程 → 创建里程碑（M0~MN）
-   • 每个里程碑自动生成 CONTEXT.md + ROADMAP.md
-   • 生成 .gsd/PREFERENCES.md（parallel + git workflow）
-   • 生成 .gsd/KNOWLEDGE.md（技术选型 + 模块边界）
-   • 输出 WS 分配表（WS → 里程碑 → GSD_MILESTONE_LOCK）
-3. 项目负责人 → 确认
-4. Portal 编排器 → 为每个 WS 设置 GSD_MILESTONE_LOCK 环境变量
-5. WS1 (LOCK=M0) → /gsd auto → 完成 M0 → PR
-6. Tech Manager WS → /gsd auto → 审查 → 合并 M0
-7. WS1~N → /gsd auto (各自 LOCK=M1~MN) → 并行开发 → PR
-   • 有依赖的 WS 通过 Agent Mailbox 或 Git 检查等待
-8. Tech Manager → 审查 → 冲突解决 → 合并 → 验收报告
-9. 项目负责人 → 确认 → 发布
+2. 规划 WS → /gsd auto → 提交到 Git：
+   • .gsd/PREFERENCES.md + .gsd/KNOWLEDGE.md
+   • PLAN.md（里程碑拆分 + WS 分配 + 验收标准）
+   • M0 代码骨架 + Git 分支
+3. 项目负责人 → 确认 PLAN.md
+4. Portal 编排器 → 创建 N+1 个 WS：
+   • 克隆仓库 + 写入 WS 级 preferences（编号 + 分配）+ /gsd auto
+5. 每个开发 WS 自动：
+   • 读 PLAN.md → GSD 讨论流程创建自己的里程碑 → 检查依赖 → 编码 → PR
+6. Tech Manager WS 自动：
+   • 监控 PR → 审查 → 合并 → 验收报告
+7. 项目负责人 → 确认 → 发布
 ```

@@ -157,8 +157,141 @@ custom_instructions:
 
 Dev WSs:
 ```yaml
-# No extra injection needed — GSD native milestone system handles this
-# via GSD_MILESTONE_LOCK environment variable
+custom_instructions:
+  - Read PLAN.md, you are WS2
+  - You are responsible for M2 Payment module
+  - Work on feat/payment-module branch
+  - Depends on M0 — do not start coding until M0 is merged to main
+```
+
+---
+
+## Workspace Bootstrap
+
+New workspaces start completely empty. A critical fact:
+
+> **GSD milestone files are local.** `~/.gsd/projects/{hash}/milestones/` only exists in the WS that created it. It does not transfer via Git.
+
+Therefore, each WS creates its own milestones through GSD's native discussion flow. The Planning WS's output is shared via Git repo files (PREFERENCES.md, KNOWLEDGE.md, PLAN.md) that guide other WSs to quickly align.
+
+### Complete Bootstrap Chain
+
+```
+Phase 0 Planning WS output (committed to Git):
+─────────────────────────────────────────
+project/
+├── PRD.md                              # Original requirements
+├── PLAN.md                             # Milestone split + WS assignments (new)
+├── .gsd/
+│   ├── PREFERENCES.md                  # Project config (parallel, git, skills)
+│   └── KNOWLEDGE.md                    # Tech stack, module boundaries, constraints
+└── src/                                # M0 dep layer code (skeleton / shared types)
+```
+
+### PLAN.md — Team Work Blueprint
+
+This is the **core shared file** from the Planning WS, committed in the Git repo. Each new WS reads this to understand its assignment:
+
+```markdown
+# Project Execution Plan
+
+## WS Assignments
+
+### Tech Manager WS
+- Role: Tech Manager, does not write business code
+- Responsibilities: PR review, conflict resolution, merge to main, acceptance
+
+### WS1 → M0 Project Foundation (Phase 2a, complete first)
+- Branch: feat/foundation
+- Goal: Project init, shared types, DB schema, base components, auth middleware
+- Acceptance Criteria:
+  - src/shared/ contains complete type definitions and utilities
+  - DB migrations run successfully
+  - Base API framework is runnable
+
+### WS1 → M1 User Management (Phase 2b, parallel after M0)
+- Branch: feat/user-module
+- Goal: Registration/login, user list, editing, permissions
+- Depends on: M0
+- Acceptance Criteria:
+  - Complete CRUD API
+  - Permissions enforced
+  - Test coverage
+
+### WS2 → M2 Payment (Phase 2b, parallel after M0)
+- Branch: feat/payment-module
+- Goal: Orders, payment integration, billing
+- Depends on: M0
+- Acceptance Criteria:
+  - Complete order creation and payment flow
+  - Test coverage
+
+### WS3 → M3 Admin Panel (Phase 2b, starts after M1 merges)
+- Branch: feat/admin-module
+- Goal: Reports, settings, audit
+- Depends on: M0, M1
+- Acceptance Criteria:
+  - Accurate report data
+  - Complete audit log
+  - Test coverage
+```
+
+### Each WS Bootstrap Steps
+
+```
+┌────────────────────────────────────────────────────────┐
+│ Portal orchestrator (when creating WS):                │
+│                                                        │
+│  1. Create workspace /home/{username}/                 │
+│  2. Configure .gsd/agent/auth.json (Provider API Key)  │
+│  3. Clone Git repo into workspace                      │
+│  4. Write workspace-level ~/.gsd/preferences.md:       │
+│     ┌──────────────────────────────────────────┐       │
+│     │ custom_instructions:                      │       │
+│     │   - Read PLAN.md, you are WS2             │       │
+│     │   - You are responsible for M2 Payment    │       │
+│     │   - Work on feat/payment-module branch    │       │
+│     │   - Depends on M0, don't start until      │       │
+│     │     M0 is merged to main                  │       │
+│     └──────────────────────────────────────────┘       │
+│  5. Launch /gsd auto                                   │
+└────────────────────────────────────────────────────────┘
+                    │
+                    ▼
+┌────────────────────────────────────────────────────────┐
+│ GSD Agent autonomously:                                │
+│                                                        │
+│  1. Read .gsd/PREFERENCES.md + .gsd/KNOWLEDGE.md       │
+│  2. Read ~/.gsd/preferences.md (workspace-level)       │
+│  3. Read PLAN.md, find assignment (WS2 → M2)           │
+│  4. Read PRD.md sections relevant to M2                │
+│  5. Enter GSD discussion flow, create own milestone:   │
+│     → M001-CONTEXT.md (based on M2 definition)        │
+│     → M001-ROADMAP.md (slice breakdown)                │
+│  6. Check dependency: is M0 merged to main?            │
+│     → No: wait (Git polling or Mailbox)                │
+│     → Yes: git checkout feat/payment-module            │
+│  7. Execute: Slice → Task → code → test → commit      │
+│  8. All done → create PR to main                       │
+└────────────────────────────────────────────────────────┘
+```
+
+### Tech Manager WS Bootstrap
+
+```
+Portal orchestrator writes workspace-level preferences:
+  custom_instructions:
+    - Read PLAN.md, you are the Tech Manager
+    - Do not write business code
+    - Continuously monitor all open PRs
+    - Review code quality then merge to main
+    - Verify against PLAN.md acceptance criteria
+    - Merge in dependency order: M0 → M1/M2 → M3
+
+GSD Agent after startup:
+  1. Reads PLAN.md, understands all milestones and dependencies
+  2. Enters continuous monitoring loop
+  3. Does not create its own milestones — only reviews and merges
 ```
 
 ---
@@ -213,14 +346,16 @@ auto auto auto              │                  │
 
 ### Phase 0: Automated Planning
 
-Uses GSD's native **discussion flow** (`showSmartEntry`). The Planning WS starts `/gsd auto` then:
+Uses GSD's native **discussion flow**. The Planning WS starts `/gsd auto` then:
 
 1. GSD enters discussion phase, reads PRD.md
-2. Creates milestones through the native flow:
-   - Each milestone generates `{MID}-CONTEXT.md` (goals, acceptance criteria, constraints)
-   - Then generates `{MID}-ROADMAP.md` (slice list)
-3. Generates `.gsd/PREFERENCES.md` and `.gsd/KNOWLEDGE.md`
-4. Outputs WS assignment table
+2. Performs tech stack selection
+3. Generates and commits to Git repo:
+   - `.gsd/PREFERENCES.md` — project config
+   - `.gsd/KNOWLEDGE.md` — tech stack + module boundaries + constraints
+   - `PLAN.md` — milestone split + WS assignments + acceptance criteria
+   - M0 dependency layer code skeleton (src/shared/ etc.)
+4. Creates Git branches (feat/foundation, feat/user-module...)
 
 **Tech selection priorities:**
 
@@ -392,17 +527,16 @@ pi.on("session_start", () => {
 ```
 1. Project Lead → PRD.md + WS count N
 2. Planning WS → /gsd auto:
-   • GSD native discussion flow → create milestones (M0~MN)
-   • Each milestone auto-generates CONTEXT.md + ROADMAP.md
-   • Generate .gsd/PREFERENCES.md (parallel + git workflow)
-   • Generate .gsd/KNOWLEDGE.md (tech stack + module boundaries)
-   • Output WS assignment table (WS → milestone → GSD_MILESTONE_LOCK)
-3. Project Lead → confirm
-4. Portal orchestrator → set GSD_MILESTONE_LOCK env var per WS
-5. WS1 (LOCK=M0) → /gsd auto → completes M0 → PR
-6. Tech Manager WS → /gsd auto → review → merge M0
-7. WS1~N → /gsd auto (each LOCK=M1~MN) → parallel dev → PR
-   • Dependent WSs wait via Agent Mailbox or Git check
-8. Tech Manager → review → resolve conflicts → merge → acceptance report
-9. Project Lead → confirm → release
+   • Tech selection → .gsd/PREFERENCES.md + .gsd/KNOWLEDGE.md
+   • Milestone split + WS assignments → PLAN.md
+   • M0 code skeleton + Git branches
+   • All committed to Git repo
+3. Project Lead → confirm PLAN.md
+4. Portal orchestrator → create N+1 WSs:
+   • Clone repo + write WS-level preferences (WS number + assignment) + /gsd auto
+5. Each dev WS automatically:
+   • Read PLAN.md → GSD discussion flow creates own milestone → check deps → code → PR
+6. Tech Manager WS automatically:
+   • Monitor PRs → review → merge → acceptance report
+7. Project Lead → confirm → release
 ```
