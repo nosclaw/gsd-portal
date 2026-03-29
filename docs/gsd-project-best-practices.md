@@ -18,17 +18,51 @@ committing, collaboration, merging — is fully automated.
 
 ## Role Definitions
 
-Every project consists of these roles:
+Every project has three types of roles. Human developers and GSD AI Agents are explicitly distinct identities.
 
-| Role | Type | Responsibility | Runs |
-|------|------|---------------|------|
-| **Project Lead** | Human | Provide PRD.md, confirm Phase 0 output, final release decision | Manual |
-| **Tech Manager** | GSD AI Agent | PR review, conflict resolution, merge to main, acceptance, dependency coordination | `/gsd auto` |
-| **Developer 1~N** | Human + GSD AI Agent | Each owns one independent module end-to-end | `/gsd auto` |
+### Role Overview
+
+| # | Role | Identity | Responsibility | Runs |
+|---|------|----------|---------------|------|
+| — | **Project Lead** | Human | Provide PRD.md, confirm Phase 0 output, final release decision | Manual |
+| — | **Tech Manager** | GSD AI Agent | PR review, conflict resolution, merge to main, acceptance, dependency coordination | `/gsd auto` |
+| 1 | **Human Developer A** | Human | Launch `/gsd auto` on Machine A, supervise Agent A | Launch then observe |
+| 1 | **GSD Agent A** | AI Agent | Auto-complete all coding, testing, commits, PR for Module A in worktree | `/gsd auto` |
+| 2 | **Human Developer B** | Human | Launch `/gsd auto` on Machine B, supervise Agent B | Launch then observe |
+| 2 | **GSD Agent B** | AI Agent | Auto-complete all coding, testing, commits, PR for Module B in worktree | `/gsd auto` |
+| N | **...** | ... | ... | ... |
+
+### Human Developer vs GSD AI Agent
+
+```
+┌────────────────────────────────────────┐
+│         Human Developer (Machine A)     │
+│                                        │
+│  Responsibilities:                     │
+│  • Clone repository                    │
+│  • Launch /gsd auto                    │
+│  • Supervise Agent work quality        │
+│  • Intervene manually when needed      │
+│                                        │
+│  ┌──────────────────────────────────┐  │
+│  │       GSD AI Agent A             │  │
+│  │                                  │  │
+│  │  Responsibilities:               │  │
+│  │  • Auto-code in Git Worktree    │  │
+│  │  • Run tests                     │  │
+│  │  • commit + push                 │  │
+│  │  • Create PR                     │  │
+│  │  • Auto-fix per review feedback  │  │
+│  └──────────────────────────────────┘  │
+└────────────────────────────────────────┘
+```
+
+Each machine = 1 human developer + 1 GSD AI Agent, forming a **development unit**.
 
 ### Tech Manager
 
-A dedicated integration role that **does not write business code**. Defined by the [`tech-manager` skill](./skills/tech-manager/SKILL.md):
+A standalone GSD AI Agent that **does not write business code** — only handles integration and coordination.
+Defined by the [`tech-manager` skill](./skills/tech-manager/SKILL.md):
 - Continuously monitors all open PRs
 - Reviews code quality, security, and standards compliance
 - Resolves merge conflicts, preserving intent from both sides
@@ -36,82 +70,170 @@ A dedicated integration role that **does not write business code**. Defined by t
 - Verifies against PRD.md acceptance criteria item by item
 - Outputs acceptance report after all modules merge
 
-### Developers
+---
 
-Each developer runs `/gsd auto` on their machine. The GSD Agent fully automates:
-- Coding on the assigned branch
-- Commit + push after each feature
-- Creating PR to main when all tasks are done
-- Auto-fixing when Tech Manager requests changes
+## Git Worktree Mode
+
+All development units **must** use Git Worktree mode. This is enforced in `PREFERENCES.md`:
+
+```markdown
+## git_workflow
+- mode: worktree
+- branch_protection: main
+- merge_method: pr_only
+- auto_push: true
+- auto_pr: true
+```
+
+### What Worktree Mode Means
+
+When a GSD Agent starts via `/gsd auto`, it automatically:
+1. Creates a Git Worktree from the main repo (isolated working directory)
+2. Works on the assigned feature branch
+3. Does not affect the main branch or other worktrees
+4. Creates PR when done — never merges directly
+
+### Why Worktree is Mandatory
+
+- **Zero conflicts**: Each Agent works in a physically isolated directory, no branch switching issues
+- **True parallelism**: N Agents code simultaneously in N separate directories
+- **Safety**: Agents cannot affect the main branch; all changes must go through PR
 
 ---
 
 ## Automated Flow
 
 ```
-                        PRD.md + Developer count N
+                        PRD.md + Human developer count N
                                 │
                     ┌───────────▼───────────┐
                     │   /team-kickoff       │  ← GSD Skill (auto)
                     │                       │
                     │  • Tech selection     │
+                    │    (latest tech)      │
                     │  • Generate PREFS.md  │
                     │  • Dependency-aware   │
                     │    task splitting     │
-                    │  • Git branches +    │
-                    │    protection        │
-                    │  • Role assignment   │
+                    │  • Git worktree cfg   │
+                    │  • Role assignment    │
                     └───────────┬───────────┘
                                 │
                     ┌───────────▼───────────┐
                     │  Project Lead reviews  │  ← Only human checkpoint
                     └───────────┬───────────┘
                                 │
-              ┌─────────────────┼─────────────────┐
-              ▼                                   ▼
-    ┌──────────────────┐                ┌──────────────────┐
-    │  Developer 1     │                │  Tech Manager    │
-    │  /gsd auto       │                │  /gsd auto       │
-    │                  │                │                  │
-    │  Phase 2a:       │                │  Continuous:     │
-    │  Dep layer → PR  │───── PR ──────▶│  Review → Merge  │
-    └────────┬─────────┘                │                  │
-             │ After dep layer merges   │                  │
-    ┌────────┼────────┐                 │                  │
-    ▼        ▼        ▼                 │                  │
-  Dev 1    Dev 2    Dev N               │                  │
+              ┌─────────────────┼──────────────────┐
+              ▼                                    ▼
+    ┌──────────────────┐                 ┌──────────────────┐
+    │  Machine A        │                 │  Tech Manager    │
+    │  Human Dev A      │                 │  (GSD AI Agent)  │
+    │  └─ GSD Agent A  │                 │  /gsd auto       │
+    │     /gsd auto    │                 │                  │
+    │                  │                 │  Continuous:     │
+    │  Phase 2a:       │                 │                  │
+    │  Dep layer → PR  │──── PR ────────▶│  Review → Merge  │
+    └────────┬─────────┘                 │                  │
+             │ After dep layer merges    │                  │
+    ┌────────┼────────┐                  │                  │
+    ▼        ▼        ▼                  │                  │
+  Mach A   Mach B   Mach N              │                  │
+  Human A  Human B  Human N             │                  │
+  Agent A  Agent B  Agent N             │                  │
   /gsd     /gsd     /gsd               │                  │
   auto     auto     auto               │                  │
-    │        │        │                 │                  │
-    └── PR ──┴── PR ──┴───── PR ──────▶│  Review → Merge  │
-                                        │  Resolve conflicts│
-                                        │  Acceptance report│
-                                        └──────────────────┘
+    │        │        │                  │                  │
+    └── PR ──┴── PR ──┴──── PR ────────▶│  Review → Merge  │
+                                         │  Resolve conflicts│
+                                         │  Acceptance report│
+                                         └──────────────────┘
 ```
 
 ### Phase 0: Automated Planning
 
-Handled by the [`team-kickoff` skill](./skills/team-kickoff/SKILL.md). Inputs: PRD.md + developer count.
+Handled by the [`team-kickoff` skill](./skills/team-kickoff/SKILL.md).
 
-1. Analyze PRD → tech stack selection (language, framework, database, deployment)
-2. Select appropriate skills based on stack → generate `PREFERENCES.md`
-3. Dependency-aware splitting:
-   - Shared dependencies (types, schema, base components) → **dependency layer** (1 developer first)
-   - Independent modules split into N parts → **parallel layer** (N developers simultaneously)
-4. Configure Git: main branch protection + create feature branches
-5. Output role assignment table
+**Input:** PRD.md + human developer count N
+
+**Auto-output:**
+
+1. Tech stack selection (prefer latest, most popular technologies)
+2. `PREFERENCES.md` (including git worktree mode configuration)
+3. Role assignment table + milestone/slice assignments
+4. Git repo initialization (main protection + feature branches)
+
+**Role assignment table example (3 human developers):**
+
+```
+=== Role Assignment Table ===
+
+Tech Manager (GSD AI Agent, runs independently)
+  └─ Responsibilities: PR review, conflict resolution, merge, acceptance
+
+Dependency Layer Phase 2a (must complete first):
+  ┌────────────────────────────────────────────────────────────────┐
+  │ Development Unit 1                                             │
+  │   Human Developer: A                                           │
+  │   GSD Agent: Agent A                                           │
+  │   Branch: feat/foundation                                      │
+  │   Milestone: M0 — Project Foundation                           │
+  │   Slices:                                                      │
+  │     S0.1 Project init + toolchain config                       │
+  │     S0.2 Shared type definitions + DB schema                   │
+  │     S0.3 Base components + shared utilities                    │
+  │     S0.4 Auth middleware + API client                          │
+  └────────────────────────────────────────────────────────────────┘
+
+Parallel Layer Phase 2b (all start simultaneously after dep layer merges):
+  ┌────────────────────────────────────────────────────────────────┐
+  │ Development Unit 1                                             │
+  │   Human Developer: A                                           │
+  │   GSD Agent: Agent A                                           │
+  │   Branch: feat/user-module                                     │
+  │   Milestone: M1 — User Management                             │
+  │   Slices:                                                      │
+  │     S1.1 User registration / login API                         │
+  │     S1.2 User list page + search/filter                        │
+  │     S1.3 User detail editing + permissions                     │
+  │     S1.4 Unit tests + integration tests                        │
+  └────────────────────────────────────────────────────────────────┘
+  ┌────────────────────────────────────────────────────────────────┐
+  │ Development Unit 2                                             │
+  │   Human Developer: B                                           │
+  │   GSD Agent: Agent B                                           │
+  │   Branch: feat/payment-module                                  │
+  │   Milestone: M2 — Payment                                     │
+  │   Slices:                                                      │
+  │     S2.1 Order creation API + data model                       │
+  │     S2.2 Payment gateway integration                           │
+  │     S2.3 Billing management pages                              │
+  │     S2.4 Unit tests + integration tests                        │
+  └────────────────────────────────────────────────────────────────┘
+  ┌────────────────────────────────────────────────────────────────┐
+  │ Development Unit 3                                             │
+  │   Human Developer: C                                           │
+  │   GSD Agent: Agent C                                           │
+  │   Branch: feat/admin-module                                    │
+  │   Milestone: M3 — Admin Panel                                 │
+  │   Slices:                                                      │
+  │     S3.1 Report API + visualizations                           │
+  │     S3.2 System settings page                                  │
+  │     S3.3 Audit log                                             │
+  │     S3.4 Unit tests + integration tests                        │
+  └────────────────────────────────────────────────────────────────┘
+```
 
 ### Phase 2a: Dependency Layer
 
-Developer 1 runs `/gsd auto`, completes all shared foundation code, creates PR.
+Human Developer A launches `/gsd auto` on Machine A.
+GSD Agent A auto-completes all shared foundation code in worktree, creates PR.
 Tech Manager reviews and merges to main.
 
 ### Phase 2b: Parallel Development
 
-All developers run `/gsd auto` **simultaneously**:
-- GSD automatically uses Git Worktree for isolated working directories
+After dependency layer merges, all human developers **simultaneously** launch `/gsd auto`:
+- Each GSD Agent auto-creates a worktree, works in an isolated directory
 - Each Agent codes only within its assigned branch and module
-- Automatically creates PR when done
+- Auto-creates PR when done
 
 ### Phase 3: Integration & Acceptance
 
@@ -122,28 +244,44 @@ Tech Manager runs continuously, automatically:
 
 ---
 
-## Dependency-Aware Splitting
+## Dependency-Aware Splitting Rules
 
 ```
-                    ┌──────────────┐
-                    │  Dependency  │    ← Must complete first
-                    │  Layer       │
-                    │  (Dev 1)     │
-                    └──────┬───────┘
-                           │ Merge to main
-           ┌───────────────┼───────────────┐
-           ▼               ▼               ▼
-    ┌──────────┐    ┌──────────┐    ┌──────────┐
-    │ Module A │    │ Module B │    │ Module C │    ← All parallel
-    │ Dev 1    │    │ Dev 2    │    │ Dev 3    │
-    └──────────┘    └──────────┘    └──────────┘
+                    ┌──────────────────────┐
+                    │  M0 Dependency Layer  │    ← Must complete first
+                    │  Dev Unit 1           │
+                    │  (Human A + Agent A)  │
+                    └──────────┬───────────┘
+                               │ PR → Tech Manager merges to main
+               ┌───────────────┼───────────────┐
+               ▼               ▼               ▼
+     ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+     │ M1 Users    │  │ M2 Payment  │  │ M3 Admin    │  ← All parallel
+     │ Dev Unit 1  │  │ Dev Unit 2  │  │ Dev Unit 3  │
+     │ HumanA+AgtA│  │ HumanB+AgtB│  │ HumanC+AgtC│
+     └─────────────┘  └─────────────┘  └─────────────┘
 ```
 
 **Splitting rules:**
-- Code depended on by multiple modules goes into the dependency layer (types, schema, base components, middleware)
-- Parallel task count = developer count, maximizing parallelism
+- Code depended on by multiple modules → dependency layer (types, schema, base components, middleware)
+- Parallel module count = human developer count N, maximizing parallelism
+- Each module maps to a milestone (M1, M2, M3...), each milestone splits into slices (S1.1, S1.2...)
 - Each module has its own directory, routes, APIs — no cross-module edits
 - Dependency layer defines interface contracts; each module implements per contract
+
+---
+
+## Tech Selection Principles
+
+Phase 0 tech selection follows these priorities:
+
+| Priority | Principle | Example |
+|----------|-----------|---------|
+| 1 | **Prefer latest, most popular tech** | bun > pnpm > yarn > npm |
+| 2 | **Choose higher performance** | Bun runtime > Node.js (when compatible) |
+| 3 | **Choose better developer experience** | Next.js > CRA, Nuxt > Vue CLI |
+| 4 | **Choose type-safe options** | TypeScript > JavaScript, Rust > C |
+| 5 | **Follow PRD when explicitly specified** | PRD requires Python → use Python |
 
 ---
 
@@ -181,12 +319,12 @@ Project PREFERENCES.md  >  ~/.gsd/projects/{hash}/preferences.md  >  ~/.gsd/pref
 ## Quick Reference
 
 ```
-1. Project Lead → provide PRD.md + developer count
-2. /team-kickoff → auto-generates everything (stack, PREFERENCES.md, split, Git)
-3. Project Lead → confirm
-4. Developer 1 → /gsd auto → dependency layer → PR
-5. Tech Manager → /gsd auto → review → merge
-6. All developers → /gsd auto → parallel development → PR
-7. Tech Manager → review → resolve conflicts → merge → acceptance report
-8. Project Lead → confirm → release
+1. Project Lead → provide PRD.md + human developer count N
+2. /team-kickoff → auto-generates everything (stack, PREFERENCES.md, assignment table, Git)
+3. Project Lead → confirm assignment table
+4. Machine A: Human Dev A → /gsd auto → Agent A completes dep layer → PR
+5. Tech Manager → /gsd auto → review → merge dep layer to main
+6. Machine A~N: All Human Devs → /gsd auto → each Agent develops in parallel → each PR
+7. Tech Manager → review each → resolve conflicts → merge → acceptance report
+8. Project Lead → confirm acceptance → release
 ```
