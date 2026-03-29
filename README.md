@@ -23,7 +23,7 @@ cd gsd-portal
 bun install
 
 # 2. Configure environment
-cd deploy
+cd docker
 cp ../.env.example .env
 # Edit .env — set AUTH_SECRET, APP_BASE_URL, WORKSPACE_DOMAIN
 
@@ -140,7 +140,7 @@ lib/
   workspace-url.ts    — URL generation (domain or path-based)
   scheduler.ts        — Background heartbeat, idle reclaim, token refresh
   env.ts              — Environment config + workspace jailbreak protection
-deploy/
+docker/
   compose.yml         — Docker Compose configuration
   ws-proxy.js         — Workspace reverse proxy
   scripts/            — GSD install script (auto-detect prebuild vs compile)

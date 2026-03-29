@@ -21,7 +21,7 @@ ENV NODE_ENV=production
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git curl tini ca-certificates && \
     rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/*
-COPY deploy/scripts/install-gsd.sh /tmp/install-gsd.sh
+COPY docker/scripts/install-gsd.sh /tmp/install-gsd.sh
 RUN chmod +x /tmp/install-gsd.sh && /tmp/install-gsd.sh && rm /tmp/install-gsd.sh
 
 # ── Stage 4: Final image ──
@@ -31,7 +31,7 @@ WORKDIR /app
 ENV HOSTNAME=0.0.0.0 PORT=3000
 
 # Startup script (checks node-pty on boot in case GSD was updated)
-COPY deploy/scripts/rebuild-pty.sh /usr/local/bin/rebuild-pty
+COPY docker/scripts/rebuild-pty.sh /usr/local/bin/rebuild-pty
 RUN printf '#!/bin/sh\nrebuild-pty 2>/dev/null || true\nif [ -f /app/ws-proxy.js ]; then node /app/ws-proxy.js & fi\nexec node server.js\n' > /app/start.sh && chmod +x /app/start.sh
 
 # External node_modules (changes on dependency updates)

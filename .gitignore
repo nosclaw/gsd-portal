@@ -10,3 +10,5 @@ dist
 .env
 .env.local
 .bg-shell/
+docker/.deploy/images/
+docker/.deploy/logs/
