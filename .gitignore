@@ -13,3 +13,5 @@ dist
 docker/.deploy/images/
 docker/.deploy/logs/
 docker/.env.staging
+docker/.deploy/config.staging
+docker/.deploy/
