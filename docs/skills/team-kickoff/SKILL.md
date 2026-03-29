@@ -1,9 +1,9 @@
 ---
 name: team-kickoff
-description: "Automated team project initialization from PRD. Reads PRD.md, performs tech selection (preferring latest/hottest tech), generates PREFERENCES.md with git worktree mode, splits work into dependency-aware parallel modules based on human developer count, assigns milestones and slices to each development unit (human + agent pair), sets up Git branches with main protection, and outputs a role assignment table. Use when starting a new team project, initializing from PRD, or setting up multi-developer parallel workflows."
+description: "Automated team project initialization from PRD. Reads PRD.md, performs tech selection (preferring latest/hottest tech like bun over npm), generates PREFERENCES.md with git worktree mode, splits work into dependency-aware milestones (M0~MN) and slices (S0.1~SN.x) with CONTEXT.md per milestone, assigns each milestone to a GSD Workspace (development unit = isolated env with own API key + Agent + human supervisor), sets up Git branches with main protection. Use when starting a new team project, initializing from PRD, or setting up multi-developer parallel workflows."
 metadata:
   author: nosclaw
-  version: "2.0.0"
+  version: "3.0.0"
 ---
 
 # Team Kickoff
@@ -22,7 +22,7 @@ Before invoking this skill, the project root must contain:
 - `PRD.md` — Product requirements document
 
 The user must specify:
-- Number of human developers (N)
+- Number of development units N (each unit = 1 GSD Workspace with its own API key)
 
 ## Execution Flow
 
@@ -99,12 +99,12 @@ Write `PREFERENCES.md` to the project root. Must include `git_workflow` section:
 
 ### Step 4: Dependency-Aware Task Splitting
 
-Split requirements into modules based on N human developers.
+Split requirements into modules based on N development units.
 
 **Concepts:**
-- **Development Unit** = 1 human developer + 1 GSD AI Agent (they share a machine)
+- **Development Unit** = 1 GSD Workspace (isolated environment with its own Provider API Key, home directory, and GSD Agent instance, supervised by a human developer)
 - **Milestone (M)** = A major module assigned to one development unit
-- **Slice (S)** = A discrete task within a milestone
+- **Slice (S)** = A discrete task within a milestone, with implementation scope, acceptance criteria, and dependencies
 
 **Splitting process:**
 
@@ -134,48 +134,90 @@ Split requirements into modules based on N human developers.
    - Mark as Phase 2b-1 (first) and Phase 2b-2 (after)
    - Maximize parallelism: only sequence what truly requires it
 
-### Step 5: Role Assignment Table
+### Step 5: Generate Milestone CONTEXT.md
 
-Output a structured role assignment table with explicit milestone and slice assignments:
+For each milestone, generate a `CONTEXT.md` in `~/.gsd/projects/{hash}/milestones/M00N/`:
 
-```
-=== Role Assignment Table ===
+```markdown
+# M1 — [Module Name]
 
-Tech Manager (GSD AI Agent, runs independently)
-  └─ Responsibilities: PR review, conflict resolution, merge, acceptance
+## Assignment
+- Development Unit: Workspace [N]
+- GSD Agent: Agent [N]
+- Human Supervisor: Developer [letter]
+- Branch: feat/[module-name]
 
-Dependency Layer Phase 2a (must complete first):
-  ┌────────────────────────────────────────────────────────────────┐
-  │ Development Unit 1                                             │
-  │   Human Developer: [name/letter]                               │
-  │   GSD Agent: Agent [name/letter]                               │
-  │   Branch: feat/foundation                                      │
-  │   Milestone: M0 — [description]                                │
-  │   Slices:                                                      │
-  │     S0.1 [task description]                                    │
-  │     S0.2 [task description]                                    │
-  │     ...                                                        │
-  └────────────────────────────────────────────────────────────────┘
+## Objective
+[Requirements summary for this module, extracted from PRD.md]
 
-Parallel Layer Phase 2b (all start after M0 merges):
-  ┌────────────────────────────────────────────────────────────────┐
-  │ Development Unit 1                                             │
-  │   Human Developer: [name/letter]                               │
-  │   GSD Agent: Agent [name/letter]                               │
-  │   Branch: feat/[module-name]                                   │
-  │   Milestone: M1 — [description]                                │
-  │   Slices:                                                      │
-  │     S1.1 [task description]                                    │
-  │     S1.2 [task description]                                    │
-  │     ...                                                        │
-  └────────────────────────────────────────────────────────────────┘
-  ┌────────────────────────────────────────────────────────────────┐
-  │ Development Unit 2                                             │
-  │   ...                                                          │
-  └────────────────────────────────────────────────────────────────┘
+## Slice List
+
+### S1.1 [Slice Title]
+- Implementation: [what to build — APIs, pages, components]
+- Acceptance Criteria:
+  - [criterion 1]
+  - [criterion 2]
+- Dependencies: [which M0 components this depends on]
+
+### S1.2 [Slice Title]
+...
+
+## Module Boundaries
+- This module only modifies files under [specific directory]
+- Uses M0 shared types and components without modifying them
+- Interacts with other modules through M0 interface contracts
+
+## Technical Constraints
+- Follow all rules in PREFERENCES.md
+- Use M0 API response format
+- Database operations use M0 configured ORM
 ```
 
-### Step 6: Git Setup
+### Step 6: Output Assignment Table
+
+Output the complete assignment table:
+
+```
+=== Milestone & Development Unit Assignment Table ===
+
+Tech Manager Workspace (GSD AI Agent, runs independently)
+  Responsibilities: PR review, conflict resolution, merge, acceptance
+
+─────────────────────────────────────────────────────
+  Dependency Layer (Phase 2a — must complete first)
+─────────────────────────────────────────────────────
+
+  Workspace 1 → Milestone M0 ([description])
+    GSD Agent: Agent 1
+    Human Supervisor: Developer [letter]
+    Branch: feat/foundation
+    Slices:
+      S0.1 [task]
+      S0.2 [task]
+      ...
+
+─────────────────────────────────────────────────────
+  Parallel Layer (Phase 2b — all start after M0 merges)
+─────────────────────────────────────────────────────
+
+  Workspace 1 → Milestone M1 ([description])
+    GSD Agent: Agent 1
+    Human Supervisor: Developer [letter]
+    Branch: feat/[module]
+    Slices:
+      S1.1 [task]
+      S1.2 [task]
+
+  Workspace 2 → Milestone M2 ([description])
+    GSD Agent: Agent 2
+    Human Supervisor: Developer [letter]
+    Branch: feat/[module]
+    Slices:
+      S2.1 [task]
+      S2.2 [task]
+```
+
+### Step 7: Git Setup
 
 Initialize the Git repository for team collaboration:
 
@@ -190,7 +232,7 @@ Initialize the Git repository for team collaboration:
    - `feat/foundation` (dependency layer)
    - `feat/{module-name}` (one per parallel module)
 
-### Step 7: Output Summary
+### Step 8: Output Summary
 
 Present the complete plan to the user for review:
 
@@ -198,17 +240,17 @@ Present the complete plan to the user for review:
 === Team Kickoff Complete ===
 
 Tech Stack: [summary with rationale]
-Human Developers: N
-Development Units: N (each = 1 human + 1 GSD Agent)
+Development Units: N (each = 1 GSD Workspace with isolated API key + Agent)
+Total Workspaces: N+1 (N dev units + 1 Tech Manager)
 Git Workflow: worktree mode, main protected, PR-only merge
 
-[Role Assignment Table from Step 5]
+[Assignment Table from Step 6]
 
 Next Steps:
 1. Project Lead: review and confirm this plan
-2. Machine A: Human Dev A runs /gsd auto → Agent A completes M0 (dep layer) → PR
-3. Tech Manager: /gsd auto → reviews and merges M0 to main
-4. Machine A~N: All Human Devs run /gsd auto → each Agent works on assigned milestone → PR
+2. Workspace 1: Dev A runs /gsd auto → Agent 1 completes M0 (dep layer) → PR
+3. Tech Manager WS: /gsd auto → reviews and merges M0 to main
+4. Workspace 1~N: All devs run /gsd auto → each Agent works on assigned milestone → PR
 5. Tech Manager: reviews each PR → resolves conflicts → merges → acceptance report
 ```
 
