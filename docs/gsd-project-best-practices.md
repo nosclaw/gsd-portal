@@ -375,101 +375,81 @@ For assigning slices to different WSs: GSD does not natively support cross-agent
 
 ---
 
-## Dependency Coordination
+## Progress Reporting & Dependency Coordination
 
-When WS3's M3 depends on WS1's M1, a coordination mechanism is needed.
+All WSs must report to Tech Manager when **starting work, progress updates, and completion**. Cross-machine WSs need real-time communication.
 
-### Current: `post_unit_hooks` + Git Check
+### Ecosystem Research
 
-Use GSD's native `post_unit_hooks` to check dependency state after each task:
+| Project | Stars | Approach | Relevance |
+|---------|-------|----------|-----------|
+| **23blocks-OS/ai-maestro** | 571 | Peer mesh + AMP protocol + Dashboard | Most complete, but complex (no center) |
+| **mainion-ai/agent-mailbox** | — | MCP native, HTTP+SQLite, 4 tools | Clean and simple, single machine |
+| **lleontor705/agent-mailbox** | — | SQLite, DLQ, visibility timeout, broadcast | Production-grade features, single machine |
+| **gsd-build/context-packet** | 12 | DAG context passing, MCP server | GSD official, no real-time comms |
 
-```yaml
-# .gsd/PREFERENCES.md
-post_unit_hooks:
-  - name: check-dependency
-    after: [execute-task]
-    run: "git fetch origin main && git log origin/main --oneline | head -5"
-```
+**No cross-agent communication exists in the GSD ecosystem.** This is a greenfield area.
 
-WS3's context declares the dependency. The agent checks if main contains M1 code before starting.
+### Recommended: Portal WebSocket Hub
 
-**Limitations:**
-- `post_unit_hooks` output enters agent context but cannot block execution
-- Agent must self-judge whether to wait
-- No true "blocking wait" mechanism
-
-### Future: Agent Mailbox Extension
-
-A GSD extension for cross-workspace dependency coordination is fully feasible:
-
-**Architecture:**
+**GSD Portal is already the central hub for all WSs.** No need for peer mesh or standalone services — Portal is the natural message router.
 
 ```
-~/.gsd/agent/extensions/agent-mailbox/
-├── extension-manifest.json
-├── index.js
-└── shared/                     # Shared message directory (all WSs access)
-    └── mailbox.jsonl
+┌─────────┐  ┌─────────┐  ┌─────────┐
+│  WS1    │  │  WS2    │  │  WS3    │
+│  Agent  │  │  Agent  │  │  Agent  │
+└────┬────┘  └────┬────┘  └────┬────┘
+     │ WS         │ WS         │ WS
+     └────────────┼────────────┘
+                  │
+         ┌────────▼────────┐
+         │   GSD Portal    │
+         │   WebSocket Hub │
+         │                 │
+         │  • Message route│
+         │  • Progress agg │
+         │  • Dep monitor  │
+         │  • Status bcast │
+         └────────┬────────┘
+                  │ WS
+         ┌────────▼────────┐
+         │ Tech Manager WS │
+         └─────────────────┘
 ```
 
-**extension-manifest.json:**
-```json
-{
-  "id": "agent-mailbox",
-  "name": "Agent Mailbox",
-  "version": "1.0.0",
-  "description": "Cross-workspace dependency coordination via shared message queue",
-  "tier": "custom",
-  "provides": {
-    "tools": ["mailbox_send", "mailbox_wait", "mailbox_check"],
-    "hooks": ["session_start"]
-  }
-}
+### GSD Extension: Portal Messenger
+
+Each WS installs a GSD extension that connects to Portal via WebSocket:
+
+**Tools provided:**
+
+| Tool | Purpose | Example |
+|------|---------|---------|
+| `portal_send` | Send message to specific WS or Tech Manager | `portal_send({ to: "ws3", type: "DEPENDENCY_READY" })` |
+| `portal_wait` | Non-blocking wait for message type (returns immediately, notified via follow-up) | `portal_wait({ type: "DEPENDENCY_READY" })` |
+| `portal_report_progress` | Report progress to Tech Manager | `portal_report_progress({ status: "S1.2 done", progress: 50 })` |
+
+**Message types:**
+
+| Type | From | To | Trigger |
+|------|------|-----|---------|
+| `PROGRESS` | All WSs | Tech Manager | Start work, complete Slice, complete milestone |
+| `DEPENDENCY_READY` | Tech Manager | Dependent WS | Upstream milestone merged to main |
+| `REVIEW_REQUEST` | Dev WS | Tech Manager | PR created |
+| `REVIEW_FEEDBACK` | Tech Manager | Dev WS | PR review has change requests |
+| `MILESTONE_COMPLETE` | Tech Manager | broadcast | Milestone acceptance passed |
+| `QUESTION` | Any WS | Tech Manager | Agent needs coordination help |
+
+**Progress reporting rules** (declared in `.gsd/KNOWLEDGE.md`):
+
+```markdown
+## Progress Reporting
+All WSs must call portal_report_progress at these points:
+- When starting work (status: "started")
+- When each Slice completes (status: "S1.2 done", progress: 50)
+- When PR is created (status: "PR created", progress: 100)
+- When review fixes are applied (status: "review fixes applied")
 ```
-
-**How it works:**
-
-Tech Manager merges M1, then:
-```
-→ Calls mailbox_send({ to: "ws3", type: "DEPENDENCY_READY", data: { milestone: "M1" } })
-```
-
-WS3's agent on startup:
-```
-→ session_start hook checks inbox
-→ Finds DEPENDENCY_READY message
-→ Begins M3 execution
-```
-
-**Recommended: Non-blocking polling pattern:**
-
-```javascript
-// Background polling + inject message when ready
-pi.on("session_start", () => {
-  const interval = setInterval(async () => {
-    const messages = readMailbox().filter(m => m.to === process.env.USER && !m.consumed);
-    if (messages.length > 0) {
-      markConsumed(messages);
-      clearInterval(interval);
-      pi.sendMessage({
-        customType: "dependency-ready",
-        content: `Dependencies ready: ${messages.map(m => m.data.milestone).join(", ")}. Starting work.`,
-        display: true
-      }, { triggerTurn: true, deliverAs: "followUp" });
-    }
-  }, 10000);  // Check every 10 seconds
-});
-```
-
-**Feasibility assessment:**
-
-| Aspect | Assessment |
-|--------|-----------|
-| Technical feasibility | ✅ Fully feasible — `pi.registerTool()` + `pi.sendMessage()` + `pi.on()` are existing APIs |
-| Shared storage | ✅ All WSs can access shared path (e.g., `/opt/shared/` or `.gsd-mailbox/` in git repo) |
-| Message reliability | ⚠️ JSONL append writes need file locking for concurrent write safety |
-| Blocking wait | ⚠️ `mailbox_wait` blocks a tool call. Recommend non-blocking polling + `pi.sendMessage()` |
-| Message cleanup | Needs periodic cleanup of consumed messages |
 
 ---
 
@@ -477,22 +457,26 @@ pi.on("session_start", () => {
 
 ```
             ┌─────────────┐
-            │  M0 Dep Layer│  ← Must complete first
-            │  WS1 LOCK=M0│
+            │  M0 Dep Layer│
+            │  WS1         │
             └──────┬──────┘
-                   │ PR → Tech Manager merges
+                   │ PR + portal_report_progress
+                   ▼
+            ┌─────────────┐
+            │ Tech Manager│  Merge M0 → portal_send(DEPENDENCY_READY)
+            │ WS          │           → broadcast to all waiting WSs
+            └──────┬──────┘
        ┌───────────┼───────────┐
        ▼           ▼           │
 ┌──────────┐ ┌──────────┐     │
 │ M1 Users │ │ M2 Pay   │     │
 │ WS1      │ │ WS2      │     │
 └────┬─────┘ └──────────┘     │
-     │ After M1 merges         │
-     │ Tech Manager sends      │
-     │ DEPENDENCY_READY         │
+     │ portal_send             │
+     │ (DEPENDENCY_READY)      │
      └─────────────────────────▼
                          ┌──────────┐
-                         │ M3 Admin │  ← mailbox_wait or Git check
+                         │ M3 Admin │  ← Real-time WebSocket notification
                          │ WS3      │
                          └──────────┘
 ```
