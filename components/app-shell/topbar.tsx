@@ -36,12 +36,12 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
   };
 
   const handleLaunchGsd = async () => {
-    router.push("/workspace");
     try {
       await fetch("/api/workspaces/launch", { method: "POST", headers: { "Content-Type": "application/json" } });
     } catch {
-      // Navigation already happened, workspace page will show error
+      // ignore, still try to open
     }
+    window.open("/api/workspaces/open", "_blank");
   };
 
   const initials = user?.name

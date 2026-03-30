@@ -36,7 +36,7 @@ export const GET = auth(async (req) => {
     return apiError("SESSION_EXPIRED", "Session expired. Please reconnect.", 401);
   }
 
-  // Redirect to workspace URL with token in hash (hash stays client-side, never sent to server)
+  // Redirect to workspace URL with token in both query param (for ws-proxy routing) and hash (for GSD frontend auth)
   const baseUrl = await getWorkspaceUrl(Number(user.id), user.username, instance.port);
-  return NextResponse.redirect(`${baseUrl}/#token=${accessToken}`);
+  return NextResponse.redirect(`${baseUrl}/?_token=${accessToken}#token=${accessToken}`);
 });

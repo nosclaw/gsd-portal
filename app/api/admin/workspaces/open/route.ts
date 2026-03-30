@@ -59,5 +59,5 @@ export const GET = auth(async (req) => {
   }
 
   const baseUrl = await getWorkspaceUrl(userId, targetUser.username, instance.port);
-  return NextResponse.redirect(`${baseUrl}/#token=${accessToken}`);
+  return NextResponse.redirect(`${baseUrl}/?_token=${accessToken}#token=${accessToken}`);
 });
