@@ -10,7 +10,10 @@ export default auth((req) => {
   const isPublicApiRoute = nextUrl.pathname.startsWith("/api/health") || nextUrl.pathname.startsWith("/api/bootstrap");
   const isAuthRoute = nextUrl.pathname.startsWith("/auth");
 
-  if (isApiAuthRoute || isPublicApiRoute) return;
+  // Allow internal ws-proxy relaunch calls
+  const isInternalRequest = req.headers.get("X-Internal-User-Id") !== null;
+
+  if (isApiAuthRoute || isPublicApiRoute || isInternalRequest) return;
 
   if (isAuthRoute) {
     if (isLoggedIn) return Response.redirect(new URL("/", nextUrl));
