@@ -41,7 +41,15 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
     } catch {
       // ignore, still try to open
     }
-    window.open("/api/workspaces/open", "_blank");
+    try {
+      const res = await fetch("/api/workspaces/open");
+      const json = await res.json();
+      if (json?.data?.url) {
+        window.open(json.data.url, "_blank");
+      }
+    } catch {
+      // ignore
+    }
   };
 
   const initials = user?.name

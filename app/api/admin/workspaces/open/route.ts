@@ -5,7 +5,7 @@ import { getGsdSession } from "@/lib/session-broker";
 import { getWorkspaceUrl } from "@/lib/workspace-url";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { apiError } from "@/lib/api-response";
+import { apiError, apiSuccess } from "@/lib/api-response";
 import type { PortalUser } from "@/lib/types";
 import { ADMIN_ROLES, WorkspaceStatus } from "@/lib/types";
 
@@ -59,5 +59,6 @@ export const GET = auth(async (req) => {
   }
 
   const baseUrl = await getWorkspaceUrl(userId, targetUser.username, instance.port);
-  return NextResponse.redirect(`${baseUrl}/?_token=${accessToken}#token=${accessToken}`);
+  const workspaceUrl = `${baseUrl}/?_token=${accessToken}#token=${accessToken}`;
+  return apiSuccess({ url: workspaceUrl });
 });

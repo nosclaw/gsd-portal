@@ -199,8 +199,10 @@ export function WorkspaceOverview() {
                     isIconOnly
                     size="sm"
                     variant="ghost"
-                    onPress={() => {
-                      window.open("/api/workspaces/open", "_blank");
+                    onPress={async () => {
+                      const res = await fetch("/api/workspaces/open");
+                      const json = await res.json();
+                      if (json?.data?.url) window.open(json.data.url, "_blank");
                     }}
                   >
                     <ExternalLink className="h-4 w-4" />

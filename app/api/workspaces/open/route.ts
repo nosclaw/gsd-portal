@@ -5,7 +5,7 @@ import { getGsdSession } from "@/lib/session-broker";
 import { getWorkspaceUrl } from "@/lib/workspace-url";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { apiError } from "@/lib/api-response";
+import { apiError, apiSuccess } from "@/lib/api-response";
 import type { PortalUser } from "@/lib/types";
 import { WorkspaceStatus } from "@/lib/types";
 
@@ -36,7 +36,8 @@ export const GET = auth(async (req) => {
     return apiError("SESSION_EXPIRED", "Session expired. Please reconnect.", 401);
   }
 
-  // Redirect to workspace URL with token in both query param (for ws-proxy routing) and hash (for GSD frontend auth)
+  // Return the URL for client-side redirect (server-side redirect drops hash fragment)
   const baseUrl = await getWorkspaceUrl(Number(user.id), user.username, instance.port);
-  return NextResponse.redirect(`${baseUrl}/?_token=${accessToken}#token=${accessToken}`);
+  const workspaceUrl = `${baseUrl}/?_token=${accessToken}#token=${accessToken}`;
+  return apiSuccess({ url: workspaceUrl });
 });

@@ -391,7 +391,11 @@ export function UserAdminTable() {
                               size="sm"
                               variant="ghost"
                               aria-label="Open workspace"
-                              onPress={() => window.open(`/api/admin/workspaces/open?userId=${row.id}`, "_blank")}
+                              onPress={async () => {
+                                const res = await fetch(`/api/admin/workspaces/open?userId=${row.id}`);
+                                const json = await res.json();
+                                if (json?.data?.url) window.open(json.data.url, "_blank");
+                              }}
                             >
                               <ExternalLink className="h-3.5 w-3.5" />
                             </Button>
