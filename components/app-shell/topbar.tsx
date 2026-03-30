@@ -36,19 +36,20 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
   };
 
   const handleLaunchGsd = async () => {
+    const win = window.open("", "_blank");
     try {
       await fetch("/api/workspaces/launch", { method: "POST", headers: { "Content-Type": "application/json" } });
     } catch {
-      // ignore, still try to open
+      // ignore
     }
     try {
       const res = await fetch("/api/workspaces/open");
       const json = await res.json();
-      if (json?.data?.url) {
-        window.open(json.data.url, "_blank");
+      if (json?.data?.url && win) {
+        win.location.href = json.data.url;
       }
     } catch {
-      // ignore
+      win?.close();
     }
   };
 

@@ -200,9 +200,11 @@ export function WorkspaceOverview() {
                     size="sm"
                     variant="ghost"
                     onPress={async () => {
+                      const win = window.open("", "_blank");
                       const res = await fetch("/api/workspaces/open");
                       const json = await res.json();
-                      if (json?.data?.url) window.open(json.data.url, "_blank");
+                      if (json?.data?.url && win) win.location.href = json.data.url;
+                      else win?.close();
                     }}
                   >
                     <ExternalLink className="h-4 w-4" />

@@ -392,9 +392,11 @@ export function UserAdminTable() {
                               variant="ghost"
                               aria-label="Open workspace"
                               onPress={async () => {
+                                const win = window.open("", "_blank");
                                 const res = await fetch(`/api/admin/workspaces/open?userId=${row.id}`);
                                 const json = await res.json();
-                                if (json?.data?.url) window.open(json.data.url, "_blank");
+                                if (json?.data?.url && win) win.location.href = json.data.url;
+                                else win?.close();
                               }}
                             >
                               <ExternalLink className="h-3.5 w-3.5" />
